@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="
+             http://maven.apache.org/POM/4.0.0
+             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>de.example</groupId>
+    <artifactId>offset-calc-josm-plugin</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>offset-calc-josm-plugin</name>
+    <description>
+        Automatically calculates imagery offsets from OSM geometries using OpenCV.
+    </description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Use the Java version required by your JOSM checkout -->
+        <maven.compiler.release>17</maven.compiler.release>
+
+        <josm.revision>19627</josm.revision>
+        <opencv.version>4.9.0-0</opencv.version>
+    </properties>
+
+    <dependencies>
+
+        <!-- JOSM is supplied by the running JOSM application. -->
+        <dependency>
+            <groupId>org.openstreetmap.josm</groupId>
+            <artifactId>josm</artifactId>
+            <version>${josm.revision}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- OpenCV from Maven Central. -->
+        <dependency>
+            <groupId>org.openpnp</groupId>
+            <artifactId>opencv</artifactId>
+            <version>${opencv.version}</version>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+
+        <finalName>offset-calc-josm-plugin</finalName>
+
+        <plugins>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+
+                <configuration>
+                    <release>${maven.compiler.release}</release>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.2</version>
+
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+
+                            <Plugin-Mainversion>${josm.revision}</Plugin-Mainversion>
+                            <Plugin-Version>${project.version}</Plugin-Version>
+                            <Plugin-Class>
+                                de.example.offsetcalc.OffsetCalcPlugin
+                            </Plugin-Class>
+                            <Plugin-Description>
+                                Automatically calculates imagery offsets
+                                from OSM geometries using OpenCV.
+                            </Plugin-Description>
+                            <Author>Frank</Author>
+
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.6.0</version>
+
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+
+                            <artifactSet>
+                                <includes>
+                                    <include>org.openpnp:opencv</include>
+                                </includes>
+                            </artifactSet>
+
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+
+                            <transformers>
+                                <transformer implementation=
+                                                     "org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <manifestEntries>
+                                        <Plugin-Mainversion>${josm.revision}</Plugin-Mainversion>
+                                        <Plugin-Version>${project.version}</Plugin-Version>
+                                        <Plugin-Class>
+                                            de.example.offsetcalc.OffsetCalcPlugin
+                                        </Plugin-Class>
+                                        <Plugin-Description>
+                                            Automatically calculates imagery offsets
+                                            from OSM geometries using OpenCV.
+                                        </Plugin-Description>
+                                        <Author>Frank</Author>
+                                    </manifestEntries>
+                                </transformer>
+                            </transformers>
+
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+        </plugins>
+    </build>
+
+</project>
