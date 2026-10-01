@@ -8,6 +8,9 @@ import javax.swing.AbstractAction;
 import javax.swing.JOptionPane;
 import java.awt.event.ActionEvent;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 public class AdjustOffsetAction extends AbstractAction {
 
     public AdjustOffsetAction() {
@@ -38,7 +41,8 @@ public class AdjustOffsetAction extends AbstractAction {
             return;
         }
 
-        OsmDataLayer dataLayer = dialog.getDataLayer();
+        OsmDataLayer dataLayer =
+                dialog.getDataLayer();
 
         AbstractTileSourceLayer<?> imageryLayer =
                 dialog.getImageryLayer();
@@ -47,18 +51,89 @@ public class AdjustOffsetAction extends AbstractAction {
             return;
         }
 
-        runCalculation(dataLayer, imageryLayer);
+        OffsetCalculationConfig config;
+
+        try {
+            config =
+                    parseDebugConfig(
+                            dialog.getDebugConfigJson()
+                    );
+        } catch (Exception ex) {
+
+            JOptionPane.showMessageDialog(
+                    MainApplication.getMainFrame(),
+                    "Invalid debug configuration JSON:\n\n"
+                            + ex.getMessage(),
+                    "Adjust Offset",
+                    JOptionPane.ERROR_MESSAGE
+            );
+
+            return;
+        }
+
+        runCalculation(
+                dataLayer,
+                imageryLayer,
+                config
+        );
+    }
+
+    private OffsetCalculationConfig parseDebugConfig(
+            String json) {
+
+        JsonObject object =
+                JsonParser.parseString(json)
+                        .getAsJsonObject();
+
+        double testOffsetX =
+                object.get("TestOffsetX")
+                        .getAsDouble();
+
+        double testOffsetY =
+                object.get("TestOffsetY")
+                        .getAsDouble();
+
+        double cannyContourApproxEpsilon =
+                object.get(
+                        "CannyContourApproxEpsilon"
+                ).getAsDouble();
+
+        int cannyMaxContourCorners =
+                object.get(
+                        "CannyMaxContourCorners"
+                ).getAsInt();
+
+        if (cannyContourApproxEpsilon <= 0) {
+            throw new IllegalArgumentException(
+                    "CannyContourApproxEpsilon must be > 0."
+            );
+        }
+
+        if (cannyMaxContourCorners < 3) {
+            throw new IllegalArgumentException(
+                    "CannyMaxContourCorners must be >= 3."
+            );
+        }
+
+        return new OffsetCalculationConfig(
+                testOffsetX,
+                testOffsetY,
+                cannyContourApproxEpsilon,
+                cannyMaxContourCorners
+        );
     }
 
     private void runCalculation(
             OsmDataLayer dataLayer,
-            AbstractTileSourceLayer<?> imageryLayer) {
+            AbstractTileSourceLayer<?> imageryLayer,
+            OffsetCalculationConfig config) {
 
         try {
             OffsetCalculator calculator =
                     new OffsetCalculator(
                             dataLayer,
-                            imageryLayer
+                            imageryLayer,
+                            config
                     );
 
             OffsetResult result =

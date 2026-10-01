@@ -10,6 +10,9 @@ import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JTextArea;
+import javax.swing.JScrollPane;
+
 import java.awt.BorderLayout;
 import java.awt.Dialog;
 import java.awt.GridLayout;
@@ -19,6 +22,17 @@ public class AdjustOffsetDialog extends JDialog {
 
     private final JComboBox<OsmDataLayer> dataLayerCombo;
     private final JComboBox<AbstractTileSourceLayer<?>> imageryLayerCombo;
+    private final JTextArea debugConfigTextArea;
+
+    private static final String DEFAULT_DEBUG_CONFIG =
+            """
+            {
+              "TestOffsetX": 0.0,
+              "TestOffsetY": 0.0,
+              "CannyContourApproxEpsilon": 0.015,
+              "CannyMaxContourCorners": 12
+            }
+            """;
 
     private boolean confirmed;
 
@@ -51,6 +65,16 @@ public class AdjustOffsetDialog extends JDialog {
                                 new AbstractTileSourceLayer<?>[0]
                         )
                 );
+
+        debugConfigTextArea =
+                new JTextArea(
+                        DEFAULT_DEBUG_CONFIG
+                );
+
+        debugConfigTextArea.setRows(10);
+        debugConfigTextArea.setColumns(50);
+        debugConfigTextArea.setLineWrap(false);
+        debugConfigTextArea.setTabSize(2);
 
         dataLayerCombo.setRenderer(
                 new LayerComboBoxRenderer<>()
@@ -87,6 +111,33 @@ public class AdjustOffsetDialog extends JDialog {
                 imageryLayerCombo
         );
 
+        JPanel debugPanel =
+                new JPanel(
+                        new BorderLayout(8, 8)
+                );
+
+        debugPanel.setBorder(
+                BorderFactory.createTitledBorder(
+                        "Debug Configuration (JSON)"
+                )
+        );
+
+        debugPanel.add(
+                new JScrollPane(
+                        debugConfigTextArea
+                ),
+                BorderLayout.CENTER
+        );
+
+        boolean debugMode =
+                Boolean.getBoolean(
+                        "offsetcalc.debug"
+                );
+
+        debugPanel.setVisible(
+                debugMode
+        );
+
         JButton okButton =
                 new JButton("OK");
 
@@ -106,8 +157,25 @@ public class AdjustOffsetDialog extends JDialog {
                 new BorderLayout()
         );
 
-        add(
+        JPanel centerPanel =
+                new JPanel(
+                        new BorderLayout(8, 8)
+                );
+
+        centerPanel.add(
                 selectionPanel,
+                BorderLayout.NORTH
+        );
+
+        if (debugMode) {
+            centerPanel.add(
+                    debugPanel,
+                    BorderLayout.CENTER
+            );
+        }
+
+        add(
+                centerPanel,
                 BorderLayout.CENTER
         );
 
@@ -138,6 +206,10 @@ public class AdjustOffsetDialog extends JDialog {
     public AbstractTileSourceLayer<?> getImageryLayer() {
         return (AbstractTileSourceLayer<?>)
                 imageryLayerCombo.getSelectedItem();
+    }
+
+    public String getDebugConfigJson() {
+        return debugConfigTextArea.getText();
     }
 
     /**

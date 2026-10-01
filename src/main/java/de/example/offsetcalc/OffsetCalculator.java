@@ -5,6 +5,9 @@ import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfPoint2f;
+
 import org.openstreetmap.josm.data.coor.EastNorth;
 import org.openstreetmap.josm.data.imagery.OffsetBookmark;
 import org.openstreetmap.josm.data.projection.Projection;
@@ -24,21 +27,20 @@ import java.util.List;
 import static de.example.offsetcalc.FilterUtil.filterOutWay;
 
 public class OffsetCalculator {
-    // To test behaviour for imagery offsets. Both offsets need to be 0.0 In production mode.
-    final double TEST_OFFSET_X = 0.0;
-    final double TEST_OFFSET_Y = 0.0;
-
     private final OsmDataLayer dataLayer;
     private final AbstractTileSourceLayer<?> imageryLayer;
+    private final OffsetCalculationConfig config;
 
     private final MapView mapView;
 
     public OffsetCalculator(
             OsmDataLayer dataLayer,
-            AbstractTileSourceLayer<?> imageryLayer) {
+            AbstractTileSourceLayer<?> imageryLayer,
+            OffsetCalculationConfig config) {
 
         this.dataLayer = dataLayer;
         this.imageryLayer = imageryLayer;
+        this.config = config;
 
         this.mapView =
                 MainApplication.getMap().mapView;
@@ -138,8 +140,8 @@ public class OffsetCalculator {
                 GeometryRasterizer.rasterize(
                         dataLayer,
                         mapView,
-                        TEST_OFFSET_X,
-                        TEST_OFFSET_Y
+                        config.testOffsetX,
+                        config.testOffsetY
                 );
 
         long geometryPixels = 0;
@@ -325,33 +327,12 @@ public class OffsetCalculator {
                         + imageryEdgePoints.size()
         );
 
-        Mat imageryEdgesInBounds =
-                Mat.zeros(
-                        imageryEdges.size(),
-                        imageryEdges.type()
-                );
-
-        for (Point point : imageryEdgePoints) {
-
-            int x =
-                    (int) point.x;
-
-            int y =
-                    (int) point.y;
-
-            imageryEdgesInBounds.put(
-                    y,
-                    x,
-                    255
-            );
-        }
-
-        org.opencv.imgcodecs.Imgcodecs.imwrite(
-                "D:\\temp\\imagery-canny-bounds.png",
-                imageryEdgesInBounds
+        createCannyDebugImages(
+                imageryEdges,
+                imageryEdgePoints,
+                config
         );
 
-        imageryEdgesInBounds.release();
         if (geometryPoints.size() < 100) {
 
             release(
@@ -587,6 +568,146 @@ public class OffsetCalculator {
         }
 
         return refined;
+    }
+
+    private void createCannyDebugImages(
+            Mat imageryEdges,
+            List<Point> imageryEdgePoints,
+            OffsetCalculationConfig config) {
+
+        java.io.File tempDirectory =
+                new java.io.File("D:\\temp");
+
+        if (!tempDirectory.exists()) {
+            tempDirectory.mkdirs();
+        }
+
+        /*
+         * 1. Complete Canny image.
+         */
+        org.opencv.imgcodecs.Imgcodecs.imwrite(
+                "D:\\temp\\imagery-canny.png",
+                imageryEdges
+        );
+
+        /*
+         * 2. Canny edges inside data-layer bounds.
+         */
+        Mat imageryEdgesInBounds =
+                Mat.zeros(
+                        imageryEdges.size(),
+                        imageryEdges.type()
+                );
+
+        for (Point point : imageryEdgePoints) {
+
+            int x =
+                    (int) point.x;
+
+            int y =
+                    (int) point.y;
+
+            imageryEdgesInBounds.put(
+                    y,
+                    x,
+                    255
+            );
+        }
+
+        org.opencv.imgcodecs.Imgcodecs.imwrite(
+                "D:\\temp\\imagery-canny-bounds.png",
+                imageryEdgesInBounds
+        );
+
+        /*
+         * 3. Find contours.
+         */
+        java.util.List<org.opencv.core.MatOfPoint> contours =
+                new java.util.ArrayList<>();
+
+        Mat hierarchy =
+                new Mat();
+
+        Imgproc.findContours(
+                imageryEdgesInBounds,
+                contours,
+                hierarchy,
+                Imgproc.RETR_EXTERNAL,
+                Imgproc.CHAIN_APPROX_SIMPLE
+        );
+
+        /*
+         * Image containing only angular contours.
+         */
+        Mat imageryEdgesAngular =
+                Mat.zeros(
+                        imageryEdges.size(),
+                        imageryEdges.type()
+                );
+
+        for (org.opencv.core.MatOfPoint contour : contours) {
+
+            org.opencv.core.MatOfPoint2f contour2f =
+                    new org.opencv.core.MatOfPoint2f(
+                            contour.toArray()
+                    );
+
+            double perimeter =
+                    Imgproc.arcLength(
+                            contour2f,
+                            true
+                    );
+
+            if (perimeter <= 0) {
+                contour2f.release();
+                contour.release();
+                continue;
+            }
+
+            double epsilon = config.cannyContourApproxEpsilon * perimeter;
+
+            org.opencv.core.MatOfPoint2f approximated2f =
+                    new org.opencv.core.MatOfPoint2f();
+
+            Imgproc.approxPolyDP(
+                    contour2f,
+                    approximated2f,
+                    epsilon,
+                    true
+            );
+
+            int cornerCount =
+                    approximated2f.toArray().length;
+
+            /*
+             * Keep contours with 3 to 8 corners.
+             */
+            if (cornerCount >= 3
+                    && cornerCount <= config.cannyMaxContourCorners) {
+
+                Imgproc.drawContours(
+                        imageryEdgesAngular,
+                        java.util.List.of(contour),
+                        -1,
+                        new org.opencv.core.Scalar(255),
+                        1
+                );
+            }
+
+            approximated2f.release();
+            contour2f.release();
+            contour.release();
+        }
+
+        hierarchy.release();
+
+        org.opencv.imgcodecs.Imgcodecs.imwrite(
+                "D:\\temp\\imagery-canny-bounds-angular.png",
+                imageryEdgesAngular
+        );
+
+        imageryEdgesAngular.release();
+        imageryEdgesInBounds.release();
     }
 
     /**
