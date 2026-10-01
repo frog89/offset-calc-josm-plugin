@@ -117,12 +117,24 @@ public final class GeometryRasterizer {
                                                 b.getEastNorth()
                                         );
 
+                                java.awt.geom.Point2D shiftedPa =
+                                        new java.awt.geom.Point2D.Double(
+                                                pa.getX() + offsetX,
+                                                pa.getY() + offsetY
+                                        );
+
+                                java.awt.geom.Point2D shiftedPb =
+                                        new java.awt.geom.Point2D.Double(
+                                                pb.getX() + offsetX,
+                                                pb.getY() + offsetY
+                                        );
+
                                 if (isOutside(
-                                        pa,
+                                        shiftedPa,
                                         width,
                                         height
                                 ) && isOutside(
-                                        pb,
+                                        shiftedPb,
                                         width,
                                         height
                                 )) {
@@ -130,12 +142,11 @@ public final class GeometryRasterizer {
                                 }
 
                                 g.drawLine(
-                                        (int) Math.round(pa.getX() + offsetX),
-                                        (int) Math.round(pa.getY() + offsetY),
-                                        (int) Math.round(pb.getX() + offsetX),
-                                        (int) Math.round(pb.getY() + offsetY)
-                                );
-                            }
+                                        (int) Math.round(shiftedPa.getX()),
+                                        (int) Math.round(shiftedPa.getY()),
+                                        (int) Math.round(shiftedPb.getX()),
+                                        (int) Math.round(shiftedPb.getY())
+                                );                            }
                         }
                 );
 

@@ -75,6 +75,18 @@ public final class EdgeDetector {
                 150
         );
 
+        java.io.File tempDirectory =
+                new java.io.File("D:\\temp");
+
+        if (!tempDirectory.exists()) {
+            tempDirectory.mkdirs();
+        }
+
+        org.opencv.imgcodecs.Imgcodecs.imwrite(
+                "D:\\temp\\imagery-canny.png",
+                edges
+        );
+
         source.release();
         gray.release();
         blurred.release();

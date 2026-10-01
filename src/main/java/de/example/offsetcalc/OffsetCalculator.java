@@ -24,6 +24,9 @@ import java.util.List;
 import static de.example.offsetcalc.FilterUtil.filterOutWay;
 
 public class OffsetCalculator {
+    // To test behaviour for imagery offsets. Both offsets need to be 0.0 In production mode.
+    final double TEST_OFFSET_X = 0.0;
+    final double TEST_OFFSET_Y = 0.0;
 
     private final OsmDataLayer dataLayer;
     private final AbstractTileSourceLayer<?> imageryLayer;
@@ -39,6 +42,44 @@ public class OffsetCalculator {
 
         this.mapView =
                 MainApplication.getMap().mapView;
+    }
+
+    private void logErrorMatrix(SearchResult best, Mat imageryDistance, List<Point> geometryPoints) {
+        System.out.println(
+                "OffsetCalc: local subpixel error matrix"
+        );
+
+        double matrixCenterX = best.x;
+        double matrixCenterY = best.y;
+
+        for (double y = matrixCenterY - 2.0;
+             y <= matrixCenterY + 2.0;
+             y += 0.5) {
+
+            StringBuilder line = new StringBuilder();
+
+            for (double x = matrixCenterX - 2.0;
+                 x <= matrixCenterX + 2.0;
+                 x += 0.5) {
+
+                double error =
+                        calculateError(
+                                imageryDistance,
+                                geometryPoints,
+                                x,
+                                y
+                        );
+
+                line.append(
+                        String.format(
+                                "%.3f ",
+                                error
+                        )
+                );
+            }
+
+            System.out.println(line);
+        }
     }
 
     public OffsetResult calculate() {
@@ -97,8 +138,8 @@ public class OffsetCalculator {
                 GeometryRasterizer.rasterize(
                         dataLayer,
                         mapView,
-                        0,
-                        0
+                        TEST_OFFSET_X,
+                        TEST_OFFSET_Y
                 );
 
         long geometryPixels = 0;
@@ -284,6 +325,33 @@ public class OffsetCalculator {
                         + imageryEdgePoints.size()
         );
 
+        Mat imageryEdgesInBounds =
+                Mat.zeros(
+                        imageryEdges.size(),
+                        imageryEdges.type()
+                );
+
+        for (Point point : imageryEdgePoints) {
+
+            int x =
+                    (int) point.x;
+
+            int y =
+                    (int) point.y;
+
+            imageryEdgesInBounds.put(
+                    y,
+                    x,
+                    255
+            );
+        }
+
+        org.opencv.imgcodecs.Imgcodecs.imwrite(
+                "D:\\temp\\imagery-canny-bounds.png",
+                imageryEdgesInBounds
+        );
+
+        imageryEdgesInBounds.release();
         if (geometryPoints.size() < 100) {
 
             release(
@@ -309,48 +377,21 @@ public class OffsetCalculator {
         /*
          * 6. Search for the best pixel offset.
          */
-        SearchResult search =
+        SearchResult best =
                 search(
                         imageryDistance,
                         geometryPoints
                 );
 
-        // Frank start
-        System.out.println(
-                "OffsetCalc: local subpixel error matrix"
-        );
-
-        for (double y = -1.5; y <= 0.5; y += 0.25) {
-            StringBuilder line = new StringBuilder();
-
-            for (double x = -3.0; x <= 0.0; x += 0.25) {
-                double error =
-                        calculateError(
-                                imageryDistance,
-                                geometryPoints,
-                                x,
-                                y
-                        );
-
-                line.append(
-                        String.format(
-                                "%.3f ",
-                                error
-                        )
-                );
-            }
-
-            System.out.println(line);
-        }
-        // Frank ende
+        logErrorMatrix(best, imageryDistance, geometryPoints);
 
         System.out.println(
                 "OffsetCalc: search result: x="
-                        + search.x
+                        + best.x
                         + ", y="
-                        + search.y
+                        + best.y
                         + ", error="
-                        + search.error
+                        + best.error
         );
 
         System.out.println(
@@ -363,17 +404,11 @@ public class OffsetCalculator {
                 )
         );
 
-        double eastPerPixel =
-                getEastPerPixel();
+        double eastPerPixel = getEastPerPixel();
+        double northPerPixel = getNorthPerPixel();
 
-        double northPerPixel =
-                getNorthPerPixel();
-
-        double east =
-                -search.x * eastPerPixel;
-
-        double north =
-                -search.y * northPerPixel;
+        double east = -best.x * eastPerPixel;
+        double north = -best.y * northPerPixel;
 
         System.out.println(
                 "OffsetCalc: eastPerPixel=" + eastPerPixel +
@@ -394,11 +429,11 @@ public class OffsetCalculator {
         );
 
         return OffsetResult.valid(
-                search.x,
-                search.y,
+                best.x,
+                best.y,
                 east,
                 north,
-                search.error
+                best.error
         );
     }
 
