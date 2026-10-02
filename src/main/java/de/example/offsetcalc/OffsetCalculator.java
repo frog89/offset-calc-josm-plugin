@@ -59,44 +59,6 @@ public class OffsetCalculator {
                 MainApplication.getMap().mapView;
     }
 
-    private void logErrorMatrix(SearchResult best, Mat imageryDistance, List<Point> geometryPoints) {
-        System.out.println(
-                "OffsetCalc: local subpixel error matrix"
-        );
-
-        double matrixCenterX = best.x;
-        double matrixCenterY = best.y;
-
-        for (double y = matrixCenterY - 2.0;
-             y <= matrixCenterY + 2.0;
-             y += 0.5) {
-
-            StringBuilder line = new StringBuilder();
-
-            for (double x = matrixCenterX - 2.0;
-                 x <= matrixCenterX + 2.0;
-                 x += 0.5) {
-
-                double error =
-                        calculateError(
-                                imageryDistance,
-                                geometryPoints,
-                                x,
-                                y
-                        );
-
-                line.append(
-                        String.format(
-                                "%.3f ",
-                                error
-                        )
-                );
-            }
-
-            System.out.println(line);
-        }
-    }
-
     public OffsetResult calculate() {
 
         if (mapView.getWidth() <= 0
@@ -107,8 +69,8 @@ public class OffsetCalculator {
             );
         }
 
-        System.out.println(
-                "OffsetCalc: config = "
+        ConsoleUtil.log(
+                "config = "
                         + config
         );
 
@@ -126,7 +88,7 @@ public class OffsetCalculator {
                         imagery
                 );
 
-        logImageryEdgeStatistics(
+        ConsoleUtil.logImageryEdgeStatistics(
                 imageryEdges
         );
 
@@ -136,7 +98,7 @@ public class OffsetCalculator {
         BufferedImage geometryImage =
                 renderGeometry();
 
-        logGeometryStatistics(
+        ConsoleUtil.logGeometryStatistics(
                 imagery,
                 geometryImage
         );
@@ -148,12 +110,7 @@ public class OffsetCalculator {
 
         /*
          * 4. Extract imagery edges inside the
-         *    OSM data-layer bounds and keep only
-         *    angular contours.
-         *
-         *    IMPORTANT:
-         *    The returned image is now used for
-         *    the distance transform.
+         *    OSM data-layer bounds.
          */
         List<Point> imageryEdgePoints =
                 extractPoints(
@@ -163,8 +120,8 @@ public class OffsetCalculator {
         java.awt.Rectangle dataBounds =
                 getDataLayerBounds();
 
-        System.out.println(
-                "OffsetCalc: data bounds = "
+        ConsoleUtil.log(
+                "data bounds = "
                         + dataBounds
         );
 
@@ -175,26 +132,18 @@ public class OffsetCalculator {
                 )
         );
 
-        System.out.println(
-                "OffsetCalc: imagery edge points in data bounds = "
+        ConsoleUtil.log(
+                "imagery edge points in data bounds = "
                         + imageryEdgePoints.size()
         );
 
-        Mat angularImageryEdges =
-                createCannyDebugImages(
-                        imageryEdges,
-                        imageryEdgePoints,
-                        config
-                );
+        createCannyDebugImages(
+                imageryEdges,
+                imageryEdgePoints
+        );
 
         /*
-         * The original Canny image is no longer needed.
-         */
-        imageryEdges.release();
-        imageryEdges = angularImageryEdges;
-
-        /*
-         * 5. Convert the angular imagery edges
+         * 5. Convert the imagery edges
          *    to a distance map.
          */
         Mat imageryDistance =
@@ -238,10 +187,11 @@ public class OffsetCalculator {
                         geometryPoints
                 );
 
-        logSearchResult(
+        ConsoleUtil.logSearchResult(
                 best,
                 imageryDistance,
-                geometryPoints
+                geometryPoints,
+                this::calculateError
         );
 
         /*
@@ -259,15 +209,15 @@ public class OffsetCalculator {
         double north =
                 -best.y * northPerPixel;
 
-        System.out.println(
-                "OffsetCalc: eastPerPixel="
+        ConsoleUtil.log(
+                "eastPerPixel="
                         + eastPerPixel
                         + ", northPerPixel="
                         + northPerPixel
         );
 
-        System.out.println(
-                "OffsetCalc: east="
+        ConsoleUtil.log(
+                "east="
                         + east
                         + ", north="
                         + north
@@ -290,97 +240,11 @@ public class OffsetCalculator {
 
     private BufferedImage renderGeometry() {
 
-        BufferedImage geometryImage =
-                GeometryRasterizer.rasterize(
-                        dataLayer,
-                        mapView,
-                        config.testOffsetX,
-                        config.testOffsetY
-                );
-
-        return geometryImage;
-    }
-
-    private void logImageryEdgeStatistics(
-            Mat imageryEdges) {
-
-        Core.MinMaxLocResult edgeMinMax =
-                Core.minMaxLoc(
-                        imageryEdges
-                );
-
-        System.out.println(
-                "OffsetCalc: imagery edges min="
-                        + edgeMinMax.minVal
-                        + ", max="
-                        + edgeMinMax.maxVal
-        );
-
-        int imageryEdgePixels = 0;
-
-        for (int y = 0;
-             y < imageryEdges.rows();
-             y++) {
-
-            for (int x = 0;
-                 x < imageryEdges.cols();
-                 x++) {
-
-                if (imageryEdges.get(y, x)[0] > 0) {
-                    imageryEdgePixels++;
-                }
-            }
-        }
-
-        System.out.println(
-                "OffsetCalc: imagery edge pixels = "
-                        + imageryEdgePixels
-        );
-    }
-
-    private void logGeometryStatistics(
-            BufferedImage imagery,
-            BufferedImage geometryImage) {
-
-        long geometryPixels = 0;
-
-        for (int y = 0;
-             y < geometryImage.getHeight();
-             y++) {
-
-            for (int x = 0;
-                 x < geometryImage.getWidth();
-                 x++) {
-
-                int rgb =
-                        geometryImage.getRGB(
-                                x,
-                                y
-                        );
-
-                if ((rgb & 0x00FFFFFF) != 0) {
-                    geometryPixels++;
-                }
-            }
-        }
-
-        System.out.println(
-                "OffsetCalc: geometry pixels = "
-                        + geometryPixels
-        );
-
-        System.out.println(
-                "OffsetCalc: imagery size = "
-                        + imagery.getWidth()
-                        + " x "
-                        + imagery.getHeight()
-        );
-
-        System.out.println(
-                "OffsetCalc: geometry size = "
-                        + geometryImage.getWidth()
-                        + " x "
-                        + geometryImage.getHeight()
+        return GeometryRasterizer.rasterize(
+                dataLayer,
+                mapView,
+                config.testOffsetX,
+                config.testOffsetY
         );
     }
 
@@ -564,102 +428,9 @@ public class OffsetCalculator {
         return refined;
     }
 
-    private boolean hasMostlyRightAngles(
-            org.opencv.core.MatOfPoint2f polygon,
-            double toleranceDegrees) {
-
-        org.opencv.core.Point[] points =
-                polygon.toArray();
-
-        if (points.length < 3) {
-            return false;
-        }
-
-        int rightAngles = 0;
-
-        for (int i = 0; i < points.length; i++) {
-
-            org.opencv.core.Point previous =
-                    points[
-                            (i - 1 + points.length)
-                                    % points.length
-                            ];
-
-            org.opencv.core.Point current =
-                    points[i];
-
-            org.opencv.core.Point next =
-                    points[
-                            (i + 1)
-                                    % points.length
-                            ];
-
-            double ax =
-                    previous.x - current.x;
-
-            double ay =
-                    previous.y - current.y;
-
-            double bx =
-                    next.x - current.x;
-
-            double by =
-                    next.y - current.y;
-
-            double lengthA =
-                    Math.sqrt(
-                            ax * ax
-                                    + ay * ay
-                    );
-
-            double lengthB =
-                    Math.sqrt(
-                            bx * bx
-                                    + by * by
-                    );
-
-            if (lengthA == 0 || lengthB == 0) {
-                continue;
-            }
-
-            double cosine =
-                    (ax * bx + ay * by)
-                            / (lengthA * lengthB);
-
-            cosine =
-                    Math.max(
-                            -1.0,
-                            Math.min(
-                                    1.0,
-                                    cosine
-                            )
-                    );
-
-            double angle =
-                    Math.toDegrees(
-                            Math.acos(cosine)
-                    );
-
-            if (Math.abs(angle - 90.0)
-                    <= toleranceDegrees) {
-
-                rightAngles++;
-            }
-        }
-
-        /*
-         * For a polygon with N corners, require
-         * at least half of the corners to be
-         * approximately right angles.
-         */
-        return rightAngles
-                >= (points.length + 1) / 2;
-    }
-
-    private Mat createCannyDebugImages(
+    private void createCannyDebugImages(
             Mat imageryEdges,
-            List<Point> imageryEdgePoints,
-            OffsetCalculationConfig config) {
+            List<Point> imageryEdgePoints) {
 
         java.io.File tempDirectory =
                 new java.io.File("D:\\temp");
@@ -668,17 +439,11 @@ public class OffsetCalculator {
             tempDirectory.mkdirs();
         }
 
-        /*
-         * 1. Complete Canny image.
-         */
         org.opencv.imgcodecs.Imgcodecs.imwrite(
                 "D:\\temp\\imagery-canny.png",
                 imageryEdges
         );
 
-        /*
-         * 2. Canny edges inside data-layer bounds.
-         */
         Mat imageryEdgesInBounds =
                 Mat.zeros(
                         imageryEdges.size(),
@@ -686,12 +451,8 @@ public class OffsetCalculator {
                 );
 
         for (Point point : imageryEdgePoints) {
-
-            int x =
-                    (int) point.x;
-
-            int y =
-                    (int) point.y;
+            int x = (int) point.x;
+            int y = (int) point.y;
 
             imageryEdgesInBounds.put(
                     y,
@@ -705,241 +466,7 @@ public class OffsetCalculator {
                 imageryEdgesInBounds
         );
 
-        /*
-         * 3. Find contours.
-         */
-        java.util.List<org.opencv.core.MatOfPoint> contours =
-                new java.util.ArrayList<>();
-
-        Mat hierarchy =
-                new Mat();
-
-        Imgproc.findContours(
-                imageryEdgesInBounds,
-                contours,
-                hierarchy,
-                Imgproc.RETR_EXTERNAL,
-                Imgproc.CHAIN_APPROX_SIMPLE
-        );
-
-        /*
-         * 4. Keep only angular contours.
-         *
-         * This image is not only a debug image anymore.
-         * It is returned to the caller and will be used
-         * for the distance transform.
-         */
-        Mat imageryEdgesAngular =
-                Mat.zeros(
-                        imageryEdges.size(),
-                        imageryEdges.type()
-                );
-
-        Mat imageryEdgesAngularDebug =
-                Mat.zeros(
-                        imageryEdges.size(),
-                        imageryEdges.type()
-                );
-
-        int acceptedContours = 0;
-        int rejectedContours = 0;
-
-        double acceptedPerimeterMin = Double.MAX_VALUE;
-        double acceptedPerimeterMax = 0.0;
-        double acceptedPerimeterSum = 0.0;
-        int shortContours = 0;
-        int acceptedCornersMin = Integer.MAX_VALUE;
-        int acceptedCornersMax = 0;
-
-        for (org.opencv.core.MatOfPoint contour : contours) {
-
-            org.opencv.core.MatOfPoint2f contour2f =
-                    new org.opencv.core.MatOfPoint2f(
-                            contour.toArray()
-                    );
-
-            double perimeter =
-                    Imgproc.arcLength(
-                            contour2f,
-                            true
-                    );
-
-            if (perimeter <= 0) {
-                contour2f.release();
-                continue;
-            }
-
-            double epsilon =
-                    config.cannyContourApproxEpsilon
-                            * perimeter;
-
-            org.opencv.core.MatOfPoint2f approximated2f =
-                    new org.opencv.core.MatOfPoint2f();
-
-            Imgproc.approxPolyDP(
-                    contour2f,
-                    approximated2f,
-                    epsilon,
-                    true
-            );
-
-            int cornerCount =
-                    approximated2f.toArray().length;
-
-            if (cornerCount >= 3
-                    && cornerCount
-                    <= config.cannyMaxContourCorners
-                    && perimeter
-                    < config.cannyMinContourPerimeter) {
-
-                shortContours++;
-            }
-
-            /*
-             * Keep contours with 3 to the configured
-             * maximum number of corners.
-             */
-            if (cornerCount >= 3
-                    && cornerCount
-                    <= config.cannyMaxContourCorners
-                    && perimeter
-                    >= config.cannyMinContourPerimeter) {
-                acceptedContours++;
-
-                acceptedPerimeterMin =
-                        Math.min(
-                                acceptedPerimeterMin,
-                                perimeter
-                        );
-
-                acceptedPerimeterMax =
-                        Math.max(
-                                acceptedPerimeterMax,
-                                perimeter
-                        );
-
-                acceptedPerimeterSum +=
-                        perimeter;
-
-                acceptedCornersMin =
-                        Math.min(
-                                acceptedCornersMin,
-                                cornerCount
-                        );
-
-                acceptedCornersMax =
-                        Math.max(
-                                acceptedCornersMax,
-                                cornerCount
-                        );
-
-                Imgproc.polylines(
-                        imageryEdgesAngular,
-                        java.util.List.of(contour),
-                        false,
-                        new org.opencv.core.Scalar(255),
-                        1
-                );
-
-                Imgproc.polylines(
-                        imageryEdgesAngularDebug,
-                        java.util.List.of(contour),
-                        false,
-                        new org.opencv.core.Scalar(255),
-                        3
-                );
-
-            } else {
-
-                rejectedContours++;
-            }
-
-            approximated2f.release();
-            contour2f.release();
-        }
-
-        System.out.println(
-                "OffsetCalc: contours total="
-                        + contours.size()
-                        + ", accepted="
-                        + acceptedContours
-                        + ", rejected="
-                        + rejectedContours
-        );
-
-        System.out.println(
-                "OffsetCalc: contours below minimum perimeter="
-                        + shortContours
-                        + ", minimum="
-                        + config.cannyMinContourPerimeter
-        );
-
-        if (acceptedContours > 0) {
-
-            double acceptedPerimeterAverage =
-                    acceptedPerimeterSum
-                            / acceptedContours;
-
-            System.out.println(
-                    "OffsetCalc: accepted contour perimeter: "
-                            + "min="
-                            + acceptedPerimeterMin
-                            + ", avg="
-                            + acceptedPerimeterAverage
-                            + ", max="
-                            + acceptedPerimeterMax
-            );
-
-            System.out.println(
-                    "OffsetCalc: accepted contour corners: "
-                            + "min="
-                            + acceptedCornersMin
-                            + ", max="
-                            + acceptedCornersMax
-            );
-        }
-
-        int angularPixels = 0;
-
-        for (int y = 0;
-             y < imageryEdgesAngular.rows();
-             y++) {
-
-            for (int x = 0;
-                 x < imageryEdgesAngular.cols();
-                 x++) {
-
-                if (imageryEdgesAngular.get(y, x)[0] > 0) {
-                    angularPixels++;
-                }
-            }
-        }
-
-        System.out.println(
-                "OffsetCalc: angular Canny pixels = "
-                        + angularPixels
-        );
-
-        hierarchy.release();
-
-        org.opencv.imgcodecs.Imgcodecs.imwrite(
-                "D:\\temp\\imagery-canny-bounds-angular.png",
-                imageryEdgesAngular
-        );
-
-        org.opencv.imgcodecs.Imgcodecs.imwrite(
-                "D:\\temp\\imagery-canny-bounds-angular-debug.png",
-                imageryEdgesAngularDebug
-        );
-
-        imageryEdgesAngularDebug.release();
         imageryEdgesInBounds.release();
-
-        /*
-         * The angular Canny image is now the image that
-         * will be used for the distance transform.
-         */
-        return imageryEdgesAngular;
     }
 
     private Mat createDistanceTransform(
@@ -1130,37 +657,6 @@ public class OffsetCalculator {
 
             geometryGray.release();
         }
-    }
-
-    private void logSearchResult(
-            SearchResult best,
-            Mat imageryDistance,
-            List<Point> geometryPoints) {
-
-        logErrorMatrix(
-                best,
-                imageryDistance,
-                geometryPoints
-        );
-
-        System.out.println(
-                "OffsetCalc: search result: x="
-                        + best.x
-                        + ", y="
-                        + best.y
-                        + ", error="
-                        + best.error
-        );
-
-        System.out.println(
-                "OffsetCalc: error at (0,0) = "
-                        + calculateError(
-                        imageryDistance,
-                        geometryPoints,
-                        0,
-                        0
-                )
-        );
     }
 
     /**
@@ -1426,16 +922,6 @@ public class OffsetCalculator {
         return mat;
     }
 
-    private void release(Mat... mats) {
-
-        for (Mat mat : mats) {
-
-            if (mat != null) {
-                mat.release();
-            }
-        }
-    }
-
     /**
      * Apply result to JOSM.
      */
@@ -1486,22 +972,5 @@ public class OffsetCalculator {
                 );
 
         mapView.repaint();
-    }
-
-    private static class SearchResult {
-
-        final double x;
-        final double y;
-        final double error;
-
-        SearchResult(
-                double x,
-                double y,
-                double error) {
-
-            this.x = x;
-            this.y = y;
-            this.error = error;
-        }
     }
 }

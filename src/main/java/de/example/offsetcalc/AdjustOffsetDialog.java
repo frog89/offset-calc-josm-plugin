@@ -46,10 +46,7 @@ public class AdjustOffsetDialog extends JDialog {
             """
             {
               "TestOffsetX": 0.0,
-              "TestOffsetY": 0.0,
-              "CannyContourApproxEpsilon": 0.005,
-              "CannyMaxContourCorners": 50,
-              "CannyMinContourPerimeter": 0.0
+              "TestOffsetY": 0.0
             }
             """;
 

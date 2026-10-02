@@ -17,24 +17,19 @@
 
 package de.example.offsetcalc;
 
-public class OffsetCalculationConfig {
+public class SearchResult {
 
-    public double testOffsetX;
-    public double testOffsetY;
+    final double x;
+    final double y;
+    final double error;
 
-    public OffsetCalculationConfig(
-            double testOffsetX,
-            double testOffsetY) {
+    SearchResult(
+            double x,
+            double y,
+            double error) {
 
-        this.testOffsetX = testOffsetX;
-        this.testOffsetY = testOffsetY;
-    }
-
-    @Override
-    public String toString() {
-        return "OffsetCalculationConfig{"
-                + "testOffsetX=" + testOffsetX
-                + ", testOffsetY=" + testOffsetY
-                + '}';
+        this.x = x;
+        this.y = y;
+        this.error = error;
     }
 }

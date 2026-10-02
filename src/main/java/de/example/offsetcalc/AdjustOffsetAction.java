@@ -145,10 +145,7 @@ public class AdjustOffsetAction extends AbstractAction {
 
         return new OffsetCalculationConfig(
                 testOffsetX,
-                testOffsetY,
-                cannyContourApproxEpsilon,
-                cannyMaxContourCorners,
-                cannyMinContourPerimeter
+                testOffsetY
         );
     }
 
