@@ -110,42 +110,22 @@ public class AdjustOffsetAction extends AbstractAction {
                 object.get("TestOffsetY")
                         .getAsDouble();
 
-        double cannyContourApproxEpsilon =
-                object.get(
-                        "CannyContourApproxEpsilon"
-                ).getAsDouble();
+        double buildingSearchRadiusMeters =
+                object.get("BuildingSearchRadiusMeters")
+                        .getAsDouble();
 
-        int cannyMaxContourCorners =
-                object.get(
-                        "CannyMaxContourCorners"
-                ).getAsInt();
+        if (!Double.isFinite(buildingSearchRadiusMeters)
+                || buildingSearchRadiusMeters < 0) {
 
-        double cannyMinContourPerimeter =
-                object.get(
-                        "CannyMinContourPerimeter"
-                ).getAsDouble();
-
-        if (cannyContourApproxEpsilon <= 0) {
             throw new IllegalArgumentException(
-                    "CannyContourApproxEpsilon must be > 0."
-            );
-        }
-
-        if (cannyMaxContourCorners < 3) {
-            throw new IllegalArgumentException(
-                    "CannyMaxContourCorners must be >= 3."
-            );
-        }
-
-        if (cannyMinContourPerimeter < 0) {
-            throw new IllegalArgumentException(
-                    "CannyMinContourPerimeter must be > 0."
+                    "BuildingSearchRadiusMeters must be >= 0."
             );
         }
 
         return new OffsetCalculationConfig(
                 testOffsetX,
-                testOffsetY
+                testOffsetY,
+                buildingSearchRadiusMeters
         );
     }
 

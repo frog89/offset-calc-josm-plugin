@@ -19,10 +19,8 @@ package de.example.offsetcalc;
 
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
-import org.opencv.core.Point;
 
 import java.awt.image.BufferedImage;
-import java.util.List;
 
 public final class ConsoleUtil {
 
@@ -32,15 +30,16 @@ public final class ConsoleUtil {
     @FunctionalInterface
     public interface ErrorFunction {
         double calculate(
-                Mat distance,
-                List<Point> points,
                 double dx,
                 double dy);
     }
 
-    public static void log(String message) {
+    public static void log(
+            String message) {
+
         System.out.println(
-                "OffsetCalc: " + message
+                "OffsetCalc: "
+                        + message
         );
     }
 
@@ -49,7 +48,8 @@ public final class ConsoleUtil {
             Throwable throwable) {
 
         System.err.println(
-                "OffsetCalc: " + message
+                "OffsetCalc: "
+                        + message
         );
 
         if (throwable != null) {
@@ -140,17 +140,39 @@ public final class ConsoleUtil {
         );
     }
 
+    public static void logBuildingMatcherStatistics(
+            BuildingEdgeMatcher matcher) {
+
+        log(
+                "building search radius = "
+                        + matcher.getRadiusMeters()
+                        + " m"
+        );
+
+        log(
+                "buildings considered = "
+                        + matcher.getCandidateBuildingCount()
+        );
+
+        log(
+                "buildings with nearby imagery edges = "
+                        + matcher.getBuildingWithEdgesCount()
+        );
+
+        log(
+                "building geometry pixels used = "
+                        + matcher.getGeometryPointCount()
+        );
+    }
+
     public static void logSearchResult(
             SearchResult best,
-            Mat imageryDistance,
-            List<Point> geometryPoints,
-            ErrorCalculator errorCalculator) {
+            ErrorFunction errorFunction) {
 
         logErrorMatrix(
-                best,
-                imageryDistance,
-                geometryPoints,
-                errorCalculator
+                best.x,
+                best.y,
+                errorFunction
         );
 
         log(
@@ -164,9 +186,7 @@ public final class ConsoleUtil {
 
         log(
                 "error at (0,0) = "
-                        + errorCalculator.calculateError(
-                        imageryDistance,
-                        geometryPoints,
+                        + errorFunction.calculate(
                         0,
                         0
                 )
@@ -176,8 +196,6 @@ public final class ConsoleUtil {
     public static void logErrorMatrix(
             double centerX,
             double centerY,
-            Mat imageryDistance,
-            List<Point> geometryPoints,
             ErrorFunction errorFunction) {
 
         log(
@@ -197,8 +215,6 @@ public final class ConsoleUtil {
 
                 double error =
                         errorFunction.calculate(
-                                imageryDistance,
-                                geometryPoints,
                                 x,
                                 y
                         );
@@ -215,63 +231,5 @@ public final class ConsoleUtil {
                     line.toString()
             );
         }
-    }
-
-    public static void logErrorMatrix(
-            SearchResult best,
-            Mat imageryDistance,
-            List<Point> geometryPoints,
-            ErrorCalculator errorCalculator) {
-
-        log(
-                "local subpixel error matrix"
-        );
-
-        double matrixCenterX =
-                best.x;
-
-        double matrixCenterY =
-                best.y;
-
-        for (double y = matrixCenterY - 2.0;
-             y <= matrixCenterY + 2.0;
-             y += 0.5) {
-
-            StringBuilder line =
-                    new StringBuilder();
-
-            for (double x = matrixCenterX - 2.0;
-                 x <= matrixCenterX + 2.0;
-                 x += 0.5) {
-
-                double error =
-                        errorCalculator.calculateError(
-                                imageryDistance,
-                                geometryPoints,
-                                x,
-                                y
-                        );
-
-                line.append(
-                        String.format(
-                                "%.3f ",
-                                error
-                        )
-                );
-            }
-
-            log(
-                    line.toString()
-            );
-        }
-    }
-
-    public interface ErrorCalculator {
-
-        double calculateError(
-                Mat distance,
-                List<Point> points,
-                double dx,
-                double dy);
     }
 }

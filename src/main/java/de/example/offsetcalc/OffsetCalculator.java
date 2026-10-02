@@ -17,11 +17,8 @@
 
 package de.example.offsetcalc;
 
-import org.opencv.core.Core;
-import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
-import org.opencv.imgproc.Imgproc;
 
 import org.openstreetmap.josm.data.coor.EastNorth;
 import org.openstreetmap.josm.data.imagery.OffsetBookmark;
@@ -69,182 +66,105 @@ public class OffsetCalculator {
             );
         }
 
-        ConsoleUtil.log(
-                "config = "
-                        + config
-        );
-
-        /*
-         * 1. Render imagery.
-         */
         BufferedImage imagery =
                 renderImagery();
 
-        /*
-         * 2. Detect imagery edges.
-         */
         Mat imageryEdges =
                 EdgeDetector.detectEdges(
                         imagery
                 );
 
-        ConsoleUtil.logImageryEdgeStatistics(
-                imageryEdges
-        );
-
-        /*
-         * 3. Render OSM geometries.
-         */
         BufferedImage geometryImage =
                 renderGeometry();
-
-        ConsoleUtil.logGeometryStatistics(
-                imagery,
-                geometryImage
-        );
 
         saveDebugImages(
                 imagery,
                 geometryImage
         );
 
-        /*
-         * 4. Extract imagery edges inside the
-         *    OSM data-layer bounds.
-         */
-        List<Point> imageryEdgePoints =
-                extractPoints(
-                        imageryEdges
+        BuildingEdgeMatcher matcher =
+                null;
+
+        try {
+
+            matcher =
+                    new BuildingEdgeMatcher(
+                            dataLayer,
+                            mapView,
+                            imageryEdges,
+                            config.buildingSearchRadiusMeters,
+                            config.testOffsetX,
+                            config.testOffsetY
+                    );
+
+            if (matcher.getBuildingWithEdgesCount() == 0) {
+
+                return OffsetResult.invalid(
+                        "No buildings with nearby imagery edges were detected."
                 );
+            }
 
-        java.awt.Rectangle dataBounds =
-                getDataLayerBounds();
+            if (matcher.getGeometryPointCount() < 100) {
 
-        ConsoleUtil.log(
-                "data bounds = "
-                        + dataBounds
-        );
-
-        imageryEdgePoints.removeIf(
-                point -> !dataBounds.contains(
-                        point.x,
-                        point.y
-                )
-        );
-
-        ConsoleUtil.log(
-                "imagery edge points in data bounds = "
-                        + imageryEdgePoints.size()
-        );
-
-        createCannyDebugImages(
-                imageryEdges,
-                imageryEdgePoints
-        );
-
-        /*
-         * 5. Convert the imagery edges
-         *    to a distance map.
-         */
-        Mat imageryDistance =
-                createDistanceTransform(
-                        imageryEdges
+                return OffsetResult.invalid(
+                        "Too few OSM geometry pixels were detected."
                 );
+            }
 
-        /*
-         * 6. Extract OSM geometry pixels.
-         */
-        List<Point> geometryPoints =
-                extractGeometryPoints(
-                        geometryImage
-                );
+            SearchResult best =
+                    search(
+                            matcher
+                    );
 
-        if (geometryPoints.size() < 100) {
+            double eastPerPixel =
+                    getEastPerPixel();
 
-            imageryDistance.release();
-            imageryEdges.release();
+            double northPerPixel =
+                    getNorthPerPixel();
 
-            return OffsetResult.invalid(
-                    "Too few OSM geometry pixels were detected."
+            double east =
+                    -best.x * eastPerPixel;
+
+            double north =
+                    -best.y * northPerPixel;
+
+            ConsoleUtil.log(
+                    "result: x="
+                            + best.x
+                            + ", y="
+                            + best.y
+                            + ", east="
+                            + east
+                            + ", north="
+                            + north
+                            + ", error="
+                            + best.error
             );
+
+            return OffsetResult.valid(
+                    best.x,
+                    best.y,
+                    east,
+                    north,
+                    best.error
+            );
+
+        } finally {
+
+            if (matcher != null) {
+                matcher.release();
+            }
+
+            imageryEdges.release();
         }
-
-        /*
-         * Downsample if necessary.
-         */
-        geometryPoints =
-                downsample(
-                        geometryPoints,
-                        10000
-                );
-
-        /*
-         * 7. Search for the best pixel offset.
-         */
-        SearchResult best =
-                search(
-                        imageryDistance,
-                        geometryPoints
-                );
-
-        ConsoleUtil.logSearchResult(
-                best,
-                imageryDistance,
-                geometryPoints,
-                this::calculateError
-        );
-
-        /*
-         * 8. Convert pixel offset to meters.
-         */
-        double eastPerPixel =
-                getEastPerPixel();
-
-        double northPerPixel =
-                getNorthPerPixel();
-
-        double east =
-                -best.x * eastPerPixel;
-
-        double north =
-                -best.y * northPerPixel;
-
-        ConsoleUtil.log(
-                "eastPerPixel="
-                        + eastPerPixel
-                        + ", northPerPixel="
-                        + northPerPixel
-        );
-
-        ConsoleUtil.log(
-                "east="
-                        + east
-                        + ", north="
-                        + north
-        );
-
-        /*
-         * 9. Release OpenCV resources.
-         */
-        imageryEdges.release();
-        imageryDistance.release();
-
-        return OffsetResult.valid(
-                best.x,
-                best.y,
-                east,
-                north,
-                best.error
-        );
     }
 
     private BufferedImage renderGeometry() {
-
         return GeometryRasterizer.rasterize(
                 dataLayer,
                 mapView,
-                config.testOffsetX,
-                config.testOffsetY
+                0.0,
+                0.0
         );
     }
 
@@ -336,8 +256,7 @@ public class OffsetCalculator {
      * Coarse-to-fine optimization.
      */
     private SearchResult search(
-            Mat distance,
-            List<Point> edgePoints) {
+            BuildingEdgeMatcher matcher) {
 
         SearchResult best =
                 new SearchResult(
@@ -351,22 +270,16 @@ public class OffsetCalculator {
          *
          * Search +/- 100 pixels in steps of 5.
          */
-        for (
-                int y = -100;
-                y <= 100;
-                y += 5
-        ) {
+        for (int y = -100;
+             y <= 100;
+             y += 5) {
 
-            for (
-                    int x = -100;
-                    x <= 100;
-                    x += 5
-            ) {
+            for (int x = -100;
+                 x <= 100;
+                 x += 5) {
 
                 double error =
-                        calculateError(
-                                distance,
-                                edgePoints,
+                        matcher.calculateError(
                                 x,
                                 y
                         );
@@ -388,8 +301,11 @@ public class OffsetCalculator {
          *
          * Refine around the coarse result.
          */
-        double centerX = best.x;
-        double centerY = best.y;
+        double centerX =
+                best.x;
+
+        double centerY =
+                best.y;
 
         SearchResult refined =
                 new SearchResult(
@@ -399,16 +315,15 @@ public class OffsetCalculator {
                 );
 
         for (double y = centerY - 2;
-                y <= centerY + 2;
-                y += 0.25) {
+             y <= centerY + 2;
+             y += 0.25) {
+
             for (double x = centerX - 2;
-                    x <= centerX + 2;
-                    x += 0.25) {
+                 x <= centerX + 2;
+                 x += 0.25) {
 
                 double error =
-                        calculateError(
-                                distance,
-                                edgePoints,
+                        matcher.calculateError(
                                 x,
                                 y
                         );
@@ -467,259 +382,6 @@ public class OffsetCalculator {
         );
 
         imageryEdgesInBounds.release();
-    }
-
-    private Mat createDistanceTransform(
-            Mat imageryEdges) {
-
-        /*
-         * White = imagery edge
-         * Black = background
-         *
-         * distanceTransform() calculates the distance
-         * to the nearest zero pixel. Therefore we
-         * invert the edge image first.
-         */
-        Mat imageryEdgeInverse =
-                new Mat();
-
-        Core.bitwise_not(
-                imageryEdges,
-                imageryEdgeInverse
-        );
-
-        Core.MinMaxLocResult inverseMinMax =
-                Core.minMaxLoc(
-                        imageryEdgeInverse
-                );
-
-        System.out.println(
-                "OffsetCalc: imagery inverse min="
-                        + inverseMinMax.minVal
-                        + ", max="
-                        + inverseMinMax.maxVal
-        );
-
-        Mat imageryDistance =
-                new Mat();
-
-        Imgproc.distanceTransform(
-                imageryEdgeInverse,
-                imageryDistance,
-                Imgproc.DIST_L2,
-                3
-        );
-
-        System.out.println(
-                "OffsetCalc: after distanceTransform: "
-                        + "rows="
-                        + imageryDistance.rows()
-                        + ", cols="
-                        + imageryDistance.cols()
-                        + ", type="
-                        + imageryDistance.type()
-                        + ", depth="
-                        + imageryDistance.depth()
-                        + ", channels="
-                        + imageryDistance.channels()
-                        + ", empty="
-                        + imageryDistance.empty()
-        );
-
-        Core.MinMaxLocResult distanceMinMax =
-                Core.minMaxLoc(
-                        imageryDistance
-                );
-
-        System.out.println(
-                "OffsetCalc: imagery distance min="
-                        + distanceMinMax.minVal
-                        + ", max="
-                        + distanceMinMax.maxVal
-        );
-
-        System.out.println(
-                "OffsetCalc: distance type="
-                        + imageryDistance.type()
-                        + ", depth="
-                        + imageryDistance.depth()
-                        + ", channels="
-                        + imageryDistance.channels()
-                        + ", min="
-                        + distanceMinMax.minVal
-                        + ", max="
-                        + distanceMinMax.maxVal
-        );
-
-        if (imageryDistance.empty()
-                || imageryDistance.rows() <= 0
-                || imageryDistance.cols() <= 0) {
-
-            throw new IllegalStateException(
-                    "OffsetCalc: distance transform produced an empty Mat."
-            );
-        }
-
-        double[] sampleA =
-                imageryDistance.get(0, 0);
-
-        double[] sampleB =
-                imageryDistance.get(
-                        imageryDistance.rows() / 2,
-                        imageryDistance.cols() / 2
-                );
-
-        double[] sampleC =
-                imageryDistance.get(
-                        imageryDistance.rows() - 1,
-                        imageryDistance.cols() - 1
-                );
-
-        System.out.println(
-                "OffsetCalc: distance samples: "
-                        + (sampleA == null
-                        ? "null"
-                        : sampleA[0])
-                        + ", "
-                        + (sampleB == null
-                        ? "null"
-                        : sampleB[0])
-                        + ", "
-                        + (sampleC == null
-                        ? "null"
-                        : sampleC[0])
-        );
-
-        long zeroCount = 0L;
-        long nonZeroCount = 0L;
-
-        for (int y = 0;
-             y < imageryEdgeInverse.rows();
-             y++) {
-
-            for (int x = 0;
-                 x < imageryEdgeInverse.cols();
-                 x++) {
-
-                double[] pixel =
-                        imageryEdgeInverse.get(
-                                y,
-                                x
-                        );
-
-                if (pixel == null) {
-                    throw new IllegalStateException(
-                            "OffsetCalc: imageryEdgeInverse.get("
-                                    + y
-                                    + ", "
-                                    + x
-                                    + ") returned null."
-                    );
-                }
-
-                double value = pixel[0];
-
-                if (value == 0) {
-                    zeroCount++;
-                } else {
-                    nonZeroCount++;
-                }
-            }
-        }
-
-        System.out.println(
-                "OffsetCalc: inverse zero="
-                        + zeroCount
-                        + ", nonZero="
-                        + nonZeroCount
-        );
-
-        imageryEdgeInverse.release();
-
-        return imageryDistance;
-    }
-
-    private List<Point> extractGeometryPoints(
-            BufferedImage geometryImage) {
-
-        Mat geometryGray =
-                bufferedImageToGrayMat(
-                        geometryImage
-                );
-
-        try {
-
-            return extractPoints(
-                    geometryGray
-            );
-
-        } finally {
-
-            geometryGray.release();
-        }
-    }
-
-    /**
-     * Average distance from every imagery edge
-     * to the nearest Data Layer geometry.
-     */
-    private double calculateError(
-            Mat distance,
-            List<Point> points,
-            double dx,
-            double dy) {
-
-        double total = 0;
-        int count = 0;
-
-        int width = distance.cols();
-        int height = distance.rows();
-
-        for (Point point : points) {
-
-            double x = point.x + dx;
-            double y = point.y + dy;
-
-            if (x < 0
-                    || x >= width - 1
-                    || y < 0
-                    || y >= height - 1) {
-                continue;
-            }
-
-            int x0 = (int) Math.floor(x);
-            int y0 = (int) Math.floor(y);
-
-            int x1 = x0 + 1;
-            int y1 = y0 + 1;
-
-            double fx = x - x0;
-            double fy = y - y0;
-
-            double d00 =distance.get(y0, x0)[0];
-            double d10 = distance.get(y0, x1)[0];
-            double d01 = distance.get(y1, x0)[0];
-            double d11 = distance.get(y1, x1)[0];
-
-            double d =
-                    d00 * (1.0 - fx) * (1.0 - fy)
-                            + d10 * fx * (1.0 - fy)
-                            + d01 * (1.0 - fx) * fy
-                            + d11 * fx * fy;
-
-            d = Math.min(d, 50.0);
-
-            total += d * d;
-            count++;
-        }
-
-        if (count == 0) {
-            return Double.MAX_VALUE;
-        }
-
-        return Math.sqrt(
-                total / count
-        );
     }
 
     private java.awt.Rectangle getDataLayerBounds() {
@@ -843,48 +505,6 @@ public class OffsetCalculator {
         return points;
     }
 
-    /**
-     * Random-ish deterministic thinning.
-     *
-     * Taking every nth point is enough for the first
-     * implementation and keeps optimization fast.
-     */
-    private List<Point> downsample(
-            List<Point> points,
-            int maxPoints) {
-
-        if (points.size() <= maxPoints) {
-            return points;
-        }
-
-        List<Point> result =
-                new ArrayList<>(
-                        maxPoints
-                );
-
-        double step =
-                (double) points.size()
-                        / maxPoints;
-
-        for (
-                int i = 0;
-                i < maxPoints;
-                i++
-        ) {
-
-            int index =
-                    (int) Math.floor(
-                            i * step
-                    );
-
-            result.add(
-                    points.get(index)
-            );
-        }
-
-        return result;
-    }
-
     private double getEastPerPixel() {
         EastNorth a = mapView.getEastNorth(0, 0);
         EastNorth b = mapView.getEastNorth(1, 0);
@@ -897,37 +517,16 @@ public class OffsetCalculator {
         return b.north() - a.north();
     }
 
-    private Mat bufferedImageToGrayMat(
-            BufferedImage image) {
-
-        Mat mat =
-                new Mat(
-                        image.getHeight(),
-                        image.getWidth(),
-                        CvType.CV_8UC1
-                );
-
-        byte[] data =
-                ((java.awt.image.DataBufferByte)
-                        image.getRaster()
-                                .getDataBuffer())
-                        .getData();
-
-        mat.put(
-                0,
-                0,
-                data
-        );
-
-        return mat;
-    }
-
     /**
      * Apply result to JOSM.
      */
     public void apply(
             OffsetResult result) {
-
+        ConsoleUtil.log(
+                "DEBUG: imagery offset application disabled."
+        );
+        return;
+        /*
         Projection projection =
                 MainApplication.getMap()
                         .mapView
@@ -972,5 +571,6 @@ public class OffsetCalculator {
                 );
 
         mapView.repaint();
+        */
     }
 }

@@ -21,20 +21,26 @@ public class OffsetCalculationConfig {
 
     public double testOffsetX;
     public double testOffsetY;
+    public double buildingSearchRadiusMeters;
 
     public OffsetCalculationConfig(
             double testOffsetX,
-            double testOffsetY) {
+            double testOffsetY,
+            double buildingSearchRadiusMeters) {
 
         this.testOffsetX = testOffsetX;
         this.testOffsetY = testOffsetY;
+        this.buildingSearchRadiusMeters =
+                buildingSearchRadiusMeters;
     }
 
     @Override
     public String toString() {
-        return "OffsetCalculationConfig{"
-                + "testOffsetX=" + testOffsetX
-                + ", testOffsetY=" + testOffsetY
-                + '}';
+        return "OffsetCalculationConfig{" +
+                "testOffsetX=" + testOffsetX +
+                ", testOffsetY=" + testOffsetY +
+                ", buildingSearchRadiusMeters=" +
+                buildingSearchRadiusMeters +
+                '}';
     }
 }
