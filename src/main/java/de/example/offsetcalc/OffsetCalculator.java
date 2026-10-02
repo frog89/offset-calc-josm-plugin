@@ -21,8 +21,6 @@ import org.opencv.core.Mat;
 import org.opencv.core.Point;
 
 import org.openstreetmap.josm.data.coor.EastNorth;
-import org.openstreetmap.josm.data.imagery.OffsetBookmark;
-import org.openstreetmap.josm.data.projection.Projection;
 import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapView;
 import org.openstreetmap.josm.gui.layer.AbstractTileSourceLayer;
@@ -66,6 +64,11 @@ public class OffsetCalculator {
             );
         }
 
+        ConsoleUtil.log(
+                "config = "
+                        + config
+        );
+
         BufferedImage imagery =
                 renderImagery();
 
@@ -80,6 +83,26 @@ public class OffsetCalculator {
         saveDebugImages(
                 imagery,
                 geometryImage
+        );
+
+        List<Point> imageryEdgePoints =
+                extractPoints(
+                        imageryEdges
+                );
+
+        java.awt.Rectangle dataBounds =
+                getDataLayerBounds();
+
+        imageryEdgePoints.removeIf(
+                point -> !dataBounds.contains(
+                        point.x,
+                        point.y
+                )
+        );
+
+        createCannyDebugImages(
+                imageryEdges,
+                imageryEdgePoints
         );
 
         BuildingEdgeMatcher matcher =
