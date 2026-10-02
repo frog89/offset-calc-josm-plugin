@@ -1,3 +1,20 @@
+/*
+ * Copyright (C) 2026 Frank Augustin
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package de.example.offsetcalc;
 
 import org.openstreetmap.josm.gui.MainApplication;
@@ -103,6 +120,11 @@ public class AdjustOffsetAction extends AbstractAction {
                         "CannyMaxContourCorners"
                 ).getAsInt();
 
+        double cannyMinContourPerimeter =
+                object.get(
+                        "CannyMinContourPerimeter"
+                ).getAsDouble();
+
         if (cannyContourApproxEpsilon <= 0) {
             throw new IllegalArgumentException(
                     "CannyContourApproxEpsilon must be > 0."
@@ -115,11 +137,18 @@ public class AdjustOffsetAction extends AbstractAction {
             );
         }
 
+        if (cannyMinContourPerimeter < 0) {
+            throw new IllegalArgumentException(
+                    "CannyMinContourPerimeter must be > 0."
+            );
+        }
+
         return new OffsetCalculationConfig(
                 testOffsetX,
                 testOffsetY,
                 cannyContourApproxEpsilon,
-                cannyMaxContourCorners
+                cannyMaxContourCorners,
+                cannyMinContourPerimeter
         );
     }
 

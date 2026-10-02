@@ -1,3 +1,20 @@
+/*
+ * Copyright (C) 2026 Frank Augustin
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package de.example.offsetcalc;
 
 import org.openstreetmap.josm.gui.MainApplication;
@@ -24,13 +41,15 @@ public class AdjustOffsetDialog extends JDialog {
     private final JComboBox<AbstractTileSourceLayer<?>> imageryLayerCombo;
     private final JTextArea debugConfigTextArea;
 
+    private static String lastDebugConfigJson;
     private static final String DEFAULT_DEBUG_CONFIG =
             """
             {
               "TestOffsetX": 0.0,
               "TestOffsetY": 0.0,
-              "CannyContourApproxEpsilon": 0.015,
-              "CannyMaxContourCorners": 12
+              "CannyContourApproxEpsilon": 0.005,
+              "CannyMaxContourCorners": 50,
+              "CannyMinContourPerimeter": 0.0
             }
             """;
 
@@ -68,7 +87,9 @@ public class AdjustOffsetDialog extends JDialog {
 
         debugConfigTextArea =
                 new JTextArea(
-                        DEFAULT_DEBUG_CONFIG
+                        lastDebugConfigJson != null
+                                ? lastDebugConfigJson
+                                : DEFAULT_DEBUG_CONFIG
                 );
 
         debugConfigTextArea.setRows(10);
@@ -143,6 +164,7 @@ public class AdjustOffsetDialog extends JDialog {
 
         okButton.addActionListener(
                 e -> {
+                    lastDebugConfigJson = debugConfigTextArea.getText();
                     confirmed = true;
                     dispose();
                 }

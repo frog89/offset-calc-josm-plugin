@@ -1,0 +1,16 @@
+Third-Party Software
+====================
+
+This software includes third-party components.
+
+OpenPnP OpenCV
+--------------
+Version: 4.9.0-0
+License: 3-Clause BSD License
+Project: OpenPnP OpenCV
+
+Gson
+----
+Version: 2.10.1
+License: Apache License 2.0
+Project: Google Gson

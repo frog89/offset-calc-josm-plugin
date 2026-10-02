@@ -1,6 +1,25 @@
 # offset-calc-josm-plugin
 
-Automatically calculates the offset of an imagery layer in JOSM.
+A JOSM plugin for calculating an offset between OSM geometry
+and imagery.
+
+## License
+
+This project is licensed under the GNU General Public License
+version 3 or later.
+
+See the LICENSE file for the complete license text.
+
+## Third-party software
+
+This project uses the following open-source libraries:
+
+- JOSM
+- OpenPnP OpenCV
+- Gson
+
+See the respective project documentation and license information
+for details.
 
 ## Algorithm
 
@@ -32,6 +51,8 @@ The resulting plugin is:
 Copy it to the JOSM plugins directory or install it through JOSM's
 plugin manager during development.
 
-Folgenden Befehl ausführen, damit das erstellte josm jar file in maven als dependency verwendet werden kann:
-D:\frank\prj\java\josm-projects\offset-calc-josm-plugin> & "C:\Program Files\JetBrains\IntelliJ IDEA Community Edition 2025.1.3\plugins\maven\lib\maven3\bin\mvn.cmd" install:install-file "-Dfile=D:\frank\prj\java\josm-projects\josm\dist\josm-custom.jar" "-DgroupId=org.openstreetmap.josm" "-DartifactId=josm"
-"-Dversion=19627" "-Dpackaging=jar"
+Execute following command in Powershell to allow to use the josm jar file as Maven dependency in the plugin's pom.xml:
+
+    ...\offset-calc-josm-plugin> & "C:\Program Files\JetBrains\IntelliJ IDEA Community Edition 2025.1.3\plugins\maven\lib\maven3\bin\mvn.cmd" `
+    install:install-file "-Dfile=D:\frank\prj\java\josm-projects\josm\dist\josm-custom.jar" "-DgroupId=org.openstreetmap.josm" "-DartifactId=josm" `
+    "-Dversion=19627" "-Dpackaging=jar"
