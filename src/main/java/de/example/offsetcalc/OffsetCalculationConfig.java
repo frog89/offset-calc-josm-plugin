@@ -19,34 +19,63 @@ package de.example.offsetcalc;
 
 public class OffsetCalculationConfig {
 
-    public double testOffsetX;
-    public double testOffsetY;
-    public double buildingSearchRadiusMeters;
-    public boolean selectedBuildingsOnly;
+    private final double testOffsetX;
+    private final double testOffsetY;
+    private final double buildingSearchRadiusMeters;
+    private final double paddingMeters;
+    private final boolean selectedBuildingsOnly;
 
     public OffsetCalculationConfig(
             double testOffsetX,
             double testOffsetY,
             double buildingSearchRadiusMeters,
+            double paddingMeters,
             boolean selectedBuildingsOnly) {
 
         this.testOffsetX = testOffsetX;
         this.testOffsetY = testOffsetY;
         this.buildingSearchRadiusMeters =
                 buildingSearchRadiusMeters;
+        this.paddingMeters =
+                paddingMeters;
         this.selectedBuildingsOnly =
                 selectedBuildingsOnly;
     }
 
+    public double getTestOffsetX() {
+        return testOffsetX;
+    }
+
+    public double getTestOffsetY() {
+        return testOffsetY;
+    }
+
+    public double getBuildingSearchRadiusMeters() {
+        return buildingSearchRadiusMeters;
+    }
+
+    public double getPaddingMeters() {
+        return paddingMeters;
+    }
+
+    public boolean isSelectedBuildingsOnly() {
+        return selectedBuildingsOnly;
+    }
+
     @Override
     public String toString() {
-        return "OffsetCalculationConfig{" +
-                "testOffsetX=" + testOffsetX +
-                ", testOffsetY=" + testOffsetY +
-                ", buildingSearchRadiusMeters=" +
-                buildingSearchRadiusMeters +
-                ", selectedBuildingsOnly=" +
-                selectedBuildingsOnly +
-                '}';
+
+        return "OffsetCalculationConfig{"
+                + "testOffsetX="
+                + testOffsetX
+                + ", testOffsetY="
+                + testOffsetY
+                + ", buildingSearchRadiusMeters="
+                + buildingSearchRadiusMeters
+                + ", paddingMeters="
+                + paddingMeters
+                + ", selectedBuildingsOnly="
+                + selectedBuildingsOnly
+                + '}';
     }
 }

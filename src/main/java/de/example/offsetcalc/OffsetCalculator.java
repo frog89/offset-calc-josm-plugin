@@ -74,7 +74,7 @@ public class OffsetCalculator {
                 "config = " + config
         );
 
-        if (config.selectedBuildingsOnly
+        if (config.isSelectedBuildingsOnly()
                 && dataLayer.getDataSet()
                 .getSelectedWays()
                 .isEmpty()) {
@@ -86,7 +86,7 @@ public class OffsetCalculator {
 
         java.awt.Rectangle initialDataBounds =
                 getDataLayerBounds(
-                        config.selectedBuildingsOnly
+                        config.isSelectedBuildingsOnly()
                 );
 
         if (initialDataBounds.width <= 0
@@ -110,33 +110,33 @@ public class OffsetCalculator {
 
         try {
 
-            AnalysisViewport analysisViewport =
-                    createAnalysisViewport(
-                            projectionBounds
-                    );
-
             /*
-             * JOSM wird tatsächlich auf den relevanten
-             * geografischen Bereich gezoomt.
+             * Let JOSM itself perform the zoom.
              *
-             * Dabei bleibt das Seitenverhältnis des echten
-             * MapView erhalten.
+             * This is important because JOSM's
+             * zoomTo(ProjectionBounds) also applies
+             * its scaleFloor() handling.
              */
             mapView.zoomTo(
-                    analysisViewport.center,
-                    analysisViewport.scale
+                    projectionBounds
             );
 
             /*
-             * Nach dem Zoom die Bounding Box nochmals
-             * bestimmen.
-             *
-             * Diese Koordinaten sind jetzt Bildschirmkoordinaten
-             * des tatsächlich verwendeten Analyse-Viewports.
+             * The analysis viewport is now based on
+             * the actual MapView state after JOSM
+             * has performed the zoom.
+             */
+            AnalysisViewport analysisViewport =
+                    createAnalysisViewport();
+
+            /*
+             * Recalculate the building bounds after
+             * the zoom because the screen coordinates
+             * have changed.
              */
             java.awt.Rectangle analysisDataBounds =
                     getDataLayerBounds(
-                            config.selectedBuildingsOnly
+                            config.isSelectedBuildingsOnly()
                     );
 
             if (analysisDataBounds.width <= 0
@@ -148,7 +148,8 @@ public class OffsetCalculator {
             }
 
             /*
-             * Gesamten aktuellen JOSM-Viewport rendern.
+             * Render the complete current JOSM viewport
+             * in its native MapView coordinate system.
              */
             BufferedImage fullImagery =
                     renderImagery(
@@ -156,37 +157,45 @@ public class OffsetCalculator {
                     );
 
             /*
-             * Genau denselben Bildschirmbereich aus
-             * der Imagery ausschneiden.
+             * Crop the imagery around the building bounds.
+             *
+             * Padding is specified in meters and converted
+             * to the current MapView scale inside the
+             * crop method.
              */
             BufferedImage imagery =
                     cropToDataBounds(
                             fullImagery,
                             analysisDataBounds,
                             mapView.getWidth(),
-                            mapView.getHeight()
+                            mapView.getHeight(),
+                            config.getPaddingMeters()
                     );
 
             /*
-             * Geometry wird auf exakt denselben Bereich
-             * gerendert bzw. zugeschnitten.
+             * Render geometry in exactly the same
+             * MapView coordinate system.
              */
             BufferedImage fullGeometry =
                     renderGeometry(
                             analysisViewport,
-                            config.selectedBuildingsOnly
+                            config.isSelectedBuildingsOnly()
                     );
 
+            /*
+             * Apply exactly the same crop to the geometry.
+             */
             BufferedImage geometryImage =
                     cropToDataBounds(
                             fullGeometry,
                             analysisDataBounds,
                             mapView.getWidth(),
-                            mapView.getHeight()
+                            mapView.getHeight(),
+                            config.getPaddingMeters()
                     );
 
             /*
-             * Canny erst NACH dem Crop berechnen.
+             * Canny is calculated only after the crop.
              */
             Mat imageryEdges =
                     EdgeDetector.detectEdges(
@@ -215,11 +224,10 @@ public class OffsetCalculator {
             );
 
             /*
-             * Der Matcher arbeitet jetzt noch mit seinem
-             * bisherigen Koordinatensystem.
-             *
-             * Die Anpassung an das neue Crop-Koordinatensystem
-             * machen wir im nächsten Schritt.
+             * The matcher still uses the old coordinate
+             * system. The conversion from MapView
+             * coordinates to cropped-image coordinates
+             * will be handled separately.
              */
             int imageOriginX =
                     0;
@@ -232,10 +240,10 @@ public class OffsetCalculator {
                             dataLayer,
                             mapView,
                             imageryEdges,
-                            config.buildingSearchRadiusMeters,
-                            config.testOffsetX,
-                            config.testOffsetY,
-                            config.selectedBuildingsOnly,
+                            config.getBuildingSearchRadiusMeters(),
+                            config.getTestOffsetX(),
+                            config.getTestOffsetY(),
+                            config.isSelectedBuildingsOnly(),
                             imageOriginX,
                             imageOriginY
                     );
@@ -300,16 +308,18 @@ public class OffsetCalculator {
             );
         }
 
-        double scale =
-                (double) analysisViewport.width
-                        / mapViewWidth;
-
+        /*
+         * Geometry is rendered in exactly the same
+         * coordinate system as the MapView.
+         *
+         * No scaling is applied here.
+         */
         return GeometryRasterizer.rasterize(
                 dataLayer,
                 mapView,
-                analysisViewport.width,
-                analysisViewport.height,
-                scale,
+                mapViewWidth,
+                mapViewHeight,
+                1.0,
                 selectedBuildingsOnly
         );
     }
@@ -334,14 +344,10 @@ public class OffsetCalculator {
             );
         }
 
-        double scale =
-                (double) analysisViewport.width
-                        / mapViewWidth;
-
         BufferedImage image =
                 new BufferedImage(
-                        analysisViewport.width,
-                        analysisViewport.height,
+                        mapViewWidth,
+                        mapViewHeight,
                         BufferedImage.TYPE_INT_ARGB
                 );
 
@@ -357,26 +363,14 @@ public class OffsetCalculator {
             graphics.fillRect(
                     0,
                     0,
-                    analysisViewport.width,
-                    analysisViewport.height
+                    mapViewWidth,
+                    mapViewHeight
             );
 
             graphics.setComposite(
                     java.awt.AlphaComposite.SrcOver
             );
 
-            /*
-             * X und Y verwenden exakt denselben Faktor.
-             */
-            graphics.scale(
-                    scale,
-                    scale
-            );
-
-            /*
-             * paintLayer() erwartet einen Graphics-Kontext
-             * für den aktuellen MapView.
-             */
             graphics.setClip(
                     0,
                     0,
@@ -384,6 +378,15 @@ public class OffsetCalculator {
                     mapViewHeight
             );
 
+            /*
+             * Important:
+             *
+             * paintLayer() expects a Graphics2D whose
+             * dimensions correspond to the MapView.
+             *
+             * Therefore we deliberately do NOT scale
+             * the Graphics2D here.
+             */
             mapView.paintLayer(
                     imageryLayer,
                     graphics
@@ -402,8 +405,6 @@ public class OffsetCalculator {
                         + mapViewWidth
                         + "x"
                         + mapViewHeight
-                        + ", scale="
-                        + scale
         );
 
         return image;
@@ -813,8 +814,7 @@ public class OffsetCalculator {
         );
     }
 
-    private AnalysisViewport createAnalysisViewport(
-            ProjectionBounds bounds) {
+    private AnalysisViewport createAnalysisViewport() {
 
         final int maxRasterSize = 2000;
 
@@ -866,10 +866,7 @@ public class OffsetCalculator {
                 );
 
         double mapViewScale =
-                bounds.getScale(
-                        mapViewWidth,
-                        mapViewHeight
-                );
+                mapView.getScale();
 
         ConsoleUtil.log(
                 "analysis viewport: mapView="
@@ -884,10 +881,12 @@ public class OffsetCalculator {
                         + rasterScale
                         + ", mapViewScale="
                         + mapViewScale
+                        + ", center="
+                        + mapView.getCenter()
         );
 
         return new AnalysisViewport(
-                bounds.getCenter(),
+                mapView.getCenter(),
                 mapViewScale,
                 width,
                 height
@@ -899,6 +898,9 @@ public class OffsetCalculator {
      */
     public void apply(
             OffsetResult result) {
+        ConsoleUtil.log("Apply Offset is disabled !!!");
+        if (1 == 1) return;
+
         Projection projection =
                 MainApplication.getMap()
                         .mapView
@@ -949,7 +951,8 @@ public class OffsetCalculator {
             BufferedImage source,
             java.awt.Rectangle dataBounds,
             int mapViewWidth,
-            int mapViewHeight) {
+            int mapViewHeight,
+            double paddingMeters) {
 
         if (source == null) {
             throw new IllegalArgumentException(
@@ -974,38 +977,81 @@ public class OffsetCalculator {
             );
         }
 
-        double scaleX =
+        if (paddingMeters < 0.0) {
+            throw new IllegalArgumentException(
+                    "Padding must not be negative."
+            );
+        }
+
+        double mapViewScale =
+                mapView.getScale();
+
+        if (mapViewScale <= 0.0) {
+            throw new IllegalStateException(
+                    "MapView has no usable scale."
+            );
+        }
+
+        /*
+         * JOSM's scale is expressed in projected
+         * East/North units per screen pixel.
+         *
+         * Therefore we can convert the requested
+         * padding from meters to MapView pixels.
+         */
+        int paddingPixels =
+                (int) Math.ceil(
+                        paddingMeters
+                                / mapViewScale
+                );
+
+        /*
+         * The source image is a uniform scaled
+         * representation of the complete MapView.
+         *
+         * Therefore the same scale factor is used
+         * for X and Y.
+         */
+        double rasterScale =
                 (double) source.getWidth()
                         / mapViewWidth;
 
-        double scaleY =
-                (double) source.getHeight()
-                        / mapViewHeight;
+        int paddedX =
+                dataBounds.x
+                        - paddingPixels;
+
+        int paddedY =
+                dataBounds.y
+                        - paddingPixels;
+
+        int paddedRight =
+                dataBounds.x
+                        + dataBounds.width
+                        + paddingPixels;
+
+        int paddedBottom =
+                dataBounds.y
+                        + dataBounds.height
+                        + paddingPixels;
 
         int sourceX =
                 (int) Math.floor(
-                        dataBounds.x * scaleX
+                        paddedX * rasterScale
                 );
 
         int sourceY =
                 (int) Math.floor(
-                        dataBounds.y * scaleY
+                        paddedY * rasterScale
                 );
 
         int sourceRight =
                 (int) Math.ceil(
-                        (
-                                dataBounds.x
-                                        + dataBounds.width
-                        ) * scaleX
+                        paddedRight * rasterScale
                 );
 
         int sourceBottom =
                 (int) Math.ceil(
-                        (
-                                dataBounds.y
-                                        + dataBounds.height
-                        ) * scaleY
+                        paddedBottom * rasterScale
                 );
 
         sourceX =
@@ -1045,10 +1091,12 @@ public class OffsetCalculator {
                 );
 
         int cropWidth =
-                sourceRight - sourceX;
+                sourceRight
+                        - sourceX;
 
         int cropHeight =
-                sourceBottom - sourceY;
+                sourceBottom
+                        - sourceY;
 
         BufferedImage cropped =
                 new BufferedImage(
@@ -1084,7 +1132,7 @@ public class OffsetCalculator {
                         + source.getWidth()
                         + "x"
                         + source.getHeight()
-                        + ", bounds="
+                        + ", data bounds="
                         + dataBounds.x
                         + ","
                         + dataBounds.y
@@ -1092,6 +1140,11 @@ public class OffsetCalculator {
                         + dataBounds.width
                         + "x"
                         + dataBounds.height
+                        + ", padding="
+                        + paddingMeters
+                        + "m ("
+                        + paddingPixels
+                        + "px)"
                         + ", result="
                         + cropWidth
                         + "x"
