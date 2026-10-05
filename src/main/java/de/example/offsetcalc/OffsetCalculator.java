@@ -286,7 +286,7 @@ public class OffsetCalculator {
                     -best.x * eastPerPixel;
 
             double northOffset =
-                    -best.y * northPerPixel;
+                    best.y * northPerPixel;
 
             return OffsetResult.valid(
                     best.x,
