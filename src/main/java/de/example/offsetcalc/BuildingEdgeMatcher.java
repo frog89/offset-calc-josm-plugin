@@ -41,10 +41,35 @@ public final class BuildingEdgeMatcher {
 
     private static final int MAX_GEOMETRY_POINTS = 10000;
 
+    /*
+     * Per-point distance is truncated at this value (pixels).
+     * Edges farther away than this are treated as "no match"
+     * instead of pulling the optimum towards them.
+     */
+    private static final double TRUNCATION_PIXELS = 12.0;
+
+    /*
+     * Fraction of the best buildings used for the global objective.
+     * The worst buildings (wrong geometry, roof lean, clutter)
+     * are ignored.
+     */
+    private static final double TRIM_FRACTION_KEPT = 0.75;
+
+    /*
+     * Upper bound used for pure statistics output.
+     */
+    private static final double STATISTICS_CAP_PIXELS = 50.0;
+
+    /*
+     * Per-building diagnostics are skipped above this count.
+     */
+    private static final int MAX_DIAGNOSTIC_BUILDINGS = 50;
+
     private final List<BuildingMatch> matches =
             new ArrayList<>();
 
     private final double radiusMeters;
+    private final double metersPerPixel;
     private final double testOffsetX;
     private final double testOffsetY;
 
@@ -90,7 +115,7 @@ public final class BuildingEdgeMatcher {
             );
         }
 
-        double metersPerPixel =
+        this.metersPerPixel =
                 Math.min(
                         eastPerPixel,
                         northPerPixel
@@ -151,7 +176,9 @@ public final class BuildingEdgeMatcher {
         double effectiveDy =
                 dy + testOffsetY;
 
-        double totalSquaredError = 0.0;
+        double[] buildingErrors =
+                new double[matches.size()];
+
         int buildingCount = 0;
 
         for (BuildingMatch match : matches) {
@@ -159,31 +186,43 @@ public final class BuildingEdgeMatcher {
             ErrorStatistics statistics =
                     match.calculateError(
                             effectiveDx,
-                            effectiveDy
+                            effectiveDy,
+                            TRUNCATION_PIXELS
                     );
 
             if (statistics.pointCount == 0) {
                 continue;
             }
 
-            double buildingMeanSquaredError =
+            buildingErrors[buildingCount++] =
                     statistics.totalSquaredError
                             / statistics.pointCount;
-
-            totalSquaredError +=
-                    buildingMeanSquaredError;
-
-            buildingCount++;
         }
 
         if (buildingCount == 0) {
             return Double.MAX_VALUE;
         }
 
-        return Math.sqrt(
-                totalSquaredError
-                        / buildingCount
+        java.util.Arrays.sort(
+                buildingErrors,
+                0,
+                buildingCount
         );
+
+        int keep =
+                buildingCount <= 3
+                        ? buildingCount
+                        : (int) Math.ceil(
+                        buildingCount * TRIM_FRACTION_KEPT
+                );
+
+        double sum = 0.0;
+
+        for (int i = 0; i < keep; i++) {
+            sum += buildingErrors[i];
+        }
+
+        return Math.sqrt(sum / keep);
     }
 
     public int getCandidateBuildingCount() {
@@ -389,6 +428,7 @@ public final class BuildingEdgeMatcher {
         }
 
         return new BuildingMatch(
+                way.getUniqueId(),
                 imageryDistance,
                 geometryPoints
         );
@@ -750,16 +790,46 @@ public final class BuildingEdgeMatcher {
 
     private static final class BuildingMatch {
 
-        private final Mat imageryDistance;
+        private final long wayId;
+        private final float[] distanceData;
+        private final int cols;
+        private final int rows;
 
         private List<Point> geometryPoints;
 
         private BuildingMatch(
+                long wayId,
                 Mat imageryDistance,
                 List<Point> geometryPoints) {
 
-            this.imageryDistance =
-                    imageryDistance;
+            this.wayId = wayId;
+            this.cols = imageryDistance.cols();
+            this.rows = imageryDistance.rows();
+
+            /*
+             * Copy the distance map once into a Java array.
+             * Reading single pixels via Mat.get() costs a JNI call
+             * each and dominated the runtime of the search.
+             */
+            Mat continuous =
+                    imageryDistance.isContinuous()
+                            ? imageryDistance
+                            : imageryDistance.clone();
+
+            this.distanceData =
+                    new float[cols * rows];
+
+            continuous.get(
+                    0,
+                    0,
+                    this.distanceData
+            );
+
+            if (continuous != imageryDistance) {
+                continuous.release();
+            }
+
+            imageryDistance.release();
 
             this.geometryPoints =
                     geometryPoints;
@@ -767,16 +837,13 @@ public final class BuildingEdgeMatcher {
 
         private ErrorStatistics calculateError(
                 double dx,
-                double dy) {
+                double dy,
+                double cap) {
+
+            double capSquared = cap * cap;
 
             double totalSquaredError = 0.0;
             int count = 0;
-
-            int width =
-                    imageryDistance.cols();
-
-            int height =
-                    imageryDistance.rows();
 
             for (Point point :
                     geometryPoints) {
@@ -787,16 +854,14 @@ public final class BuildingEdgeMatcher {
                 double y =
                         point.y + dy;
 
+                count++;
+
                 if (x < 0
-                        || x >= width - 1
+                        || x >= cols - 1
                         || y < 0
-                        || y >= height - 1) {
+                        || y >= rows - 1) {
 
-                    totalSquaredError +=
-                            50.0 * 50.0;
-
-                    count++;
-
+                    totalSquaredError += capSquared;
                     continue;
                 }
 
@@ -806,66 +871,34 @@ public final class BuildingEdgeMatcher {
                 int y0 =
                         (int) Math.floor(y);
 
-                int x1 =
-                        x0 + 1;
-
-                int y1 =
-                        y0 + 1;
-
                 double fx =
                         x - x0;
 
                 double fy =
                         y - y0;
 
-                double d00 =
-                        imageryDistance.get(
-                                y0,
-                                x0
-                        )[0];
+                int index =
+                        y0 * cols + x0;
 
-                double d10 =
-                        imageryDistance.get(
-                                y0,
-                                x1
-                        )[0];
-
-                double d01 =
-                        imageryDistance.get(
-                                y1,
-                                x0
-                        )[0];
-
-                double d11 =
-                        imageryDistance.get(
-                                y1,
-                                x1
-                        )[0];
+                double d00 = distanceData[index];
+                double d10 = distanceData[index + 1];
+                double d01 = distanceData[index + cols];
+                double d11 = distanceData[index + cols + 1];
 
                 double distance =
-                        d00
-                                * (1.0 - fx)
-                                * (1.0 - fy)
-                                + d10
-                                * fx
-                                * (1.0 - fy)
-                                + d01
-                                * (1.0 - fx)
-                                * fy
-                                + d11
-                                * fx
-                                * fy;
+                        d00 * (1.0 - fx) * (1.0 - fy)
+                                + d10 * fx * (1.0 - fy)
+                                + d01 * (1.0 - fx) * fy
+                                + d11 * fx * fy;
 
                 distance =
                         Math.min(
                                 distance,
-                                50.0
+                                cap
                         );
 
                 totalSquaredError +=
                         distance * distance;
-
-                count++;
             }
 
             return new ErrorStatistics(
@@ -875,7 +908,7 @@ public final class BuildingEdgeMatcher {
         }
 
         private void release() {
-            imageryDistance.release();
+            // distance Mat is already released in the constructor
         }
     }
 
@@ -892,7 +925,8 @@ public final class BuildingEdgeMatcher {
             ErrorStatistics statistics =
                     match.calculateError(
                             dx + testOffsetX,
-                            dy + testOffsetY
+                            dy + testOffsetY,
+                            STATISTICS_CAP_PIXELS
                     );
 
             if (statistics.pointCount == 0) {
@@ -971,6 +1005,190 @@ public final class BuildingEdgeMatcher {
                         + p95
                         + ", max="
                         + maximum
+        );
+    }
+
+    /**
+     * Diagnostic: finds the best shift for every building on its own
+     * and compares it with the global shift.
+     *
+     * Small spread  -> a global offset is a good model, remaining
+     *                  error comes from a few outlier buildings.
+     * Large spread  -> imagery distortion / roof lean / inaccurate
+     *                  geometry; a single offset cannot do better.
+     *
+     * East/North are given with the same sign convention as the
+     * final result (shift to apply to the imagery).
+     */
+    public void logPerBuildingOffsets(
+            double globalDx,
+            double globalDy) {
+
+        if (matches.isEmpty()) {
+            return;
+        }
+
+        if (matches.size() > MAX_DIAGNOSTIC_BUILDINGS) {
+
+            ConsoleUtil.log(
+                    "per-building offsets skipped: "
+                            + matches.size()
+                            + " buildings (limit "
+                            + MAX_DIAGNOSTIC_BUILDINGS
+                            + ")"
+            );
+            return;
+        }
+
+        double globalX = globalDx + testOffsetX;
+        double globalY = globalDy + testOffsetY;
+
+        ConsoleUtil.log(
+                String.format(
+                        java.util.Locale.ROOT,
+                        "per-building optimum (global: x=%.2f, y=%.2f px; 1 px = %.3f m)",
+                        globalX,
+                        globalY,
+                        metersPerPixel
+                )
+        );
+
+        List<Double> ownXs = new ArrayList<>();
+        List<Double> ownYs = new ArrayList<>();
+
+        int index = 0;
+
+        for (BuildingMatch match : matches) {
+
+            index++;
+
+            SearchResult own =
+                    OffsetSearch.minimize(
+                            (x, y) -> {
+
+                                ErrorStatistics statistics =
+                                        match.calculateError(
+                                                x,
+                                                y,
+                                                TRUNCATION_PIXELS
+                                        );
+
+                                if (statistics.pointCount == 0) {
+                                    return Double.MAX_VALUE;
+                                }
+
+                                return Math.sqrt(
+                                        statistics.totalSquaredError
+                                                / statistics.pointCount
+                                );
+                            }
+                    );
+
+            ErrorStatistics atOwn =
+                    match.calculateError(
+                            own.x,
+                            own.y,
+                            STATISTICS_CAP_PIXELS
+                    );
+
+            ErrorStatistics atGlobal =
+                    match.calculateError(
+                            globalX,
+                            globalY,
+                            STATISTICS_CAP_PIXELS
+                    );
+
+            double errorOwn =
+                    Math.sqrt(
+                            atOwn.totalSquaredError
+                                    / Math.max(1, atOwn.pointCount)
+                    );
+
+            double errorGlobal =
+                    Math.sqrt(
+                            atGlobal.totalSquaredError
+                                    / Math.max(1, atGlobal.pointCount)
+                    );
+
+            ownXs.add(own.x);
+            ownYs.add(own.y);
+
+            ConsoleUtil.log(
+                    String.format(
+                            java.util.Locale.ROOT,
+                            "  #%d way=%d pts=%d: own=(%.2f, %.2f) px"
+                                    + " = E %.2f m / N %.2f m,"
+                                    + " err@own=%.2f px, err@global=%.2f px,"
+                                    + " delta=(%.2f, %.2f) px",
+                            index,
+                            match.wayId,
+                            match.geometryPoints.size(),
+                            own.x,
+                            own.y,
+                            -own.x * metersPerPixel,
+                            own.y * metersPerPixel,
+                            errorOwn,
+                            errorGlobal,
+                            own.x - globalX,
+                            own.y - globalY
+                    )
+            );
+        }
+
+        double medianX = median(ownXs);
+        double medianY = median(ownYs);
+
+        List<Double> deviations = new ArrayList<>();
+
+        for (int i = 0; i < ownXs.size(); i++) {
+
+            deviations.add(
+                    Math.hypot(
+                            ownXs.get(i) - medianX,
+                            ownYs.get(i) - medianY
+                    )
+            );
+        }
+
+        ConsoleUtil.log(
+                String.format(
+                        java.util.Locale.ROOT,
+                        "per-building optimum: median=(%.2f, %.2f) px,"
+                                + " median distance to median=%.2f px (%.2f m),"
+                                + " global-to-median=(%.2f, %.2f) px",
+                        medianX,
+                        medianY,
+                        median(deviations),
+                        median(deviations) * metersPerPixel,
+                        globalX - medianX,
+                        globalY - medianY
+                )
+        );
+    }
+
+    private static double median(
+            List<Double> values) {
+
+        List<Double> sorted =
+                new ArrayList<>(values);
+
+        sorted.sort(
+                Double::compareTo
+        );
+
+        int n = sorted.size();
+
+        if (n == 0) {
+            return Double.NaN;
+        }
+
+        if (n % 2 == 1) {
+            return sorted.get(n / 2);
+        }
+
+        return 0.5 * (
+                sorted.get(n / 2 - 1)
+                        + sorted.get(n / 2)
         );
     }
 

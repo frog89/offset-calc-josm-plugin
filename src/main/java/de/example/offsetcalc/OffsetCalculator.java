@@ -266,6 +266,18 @@ public class OffsetCalculator {
             );
 
             ConsoleUtil.log(
+                    "objective (truncated, trimmed RMS) = "
+                            + best.error
+                            + ", shift px = ("
+                            + best.x + ", " + best.y + ")"
+            );
+
+            matcher.logPerBuildingOffsets(
+                    best.x,
+                    best.y
+            );
+
+            ConsoleUtil.log(
                     "building matching: candidates="
                             + matcher.getCandidateBuildingCount()
                             + ", withEdges="
@@ -285,6 +297,13 @@ public class OffsetCalculator {
             double eastOffset =
                     -best.x * eastPerPixel;
 
+            /*
+             * Pixel-Y zeigt nach unten, North zeigt nach oben.
+             * best.y ist die Verschiebung der Geometrie in Bildkoordinaten;
+             * das Imagery muss entgegengesetzt verschoben werden.
+             * Entgegengesetzt in Pixel-Y (nach oben) = positives North.
+             * (East dagegen: -best.x, da beide Achsen gleich laufen.)
+             */
             double northOffset =
                     best.y * northPerPixel;
 
@@ -458,89 +477,9 @@ public class OffsetCalculator {
     private SearchResult search(
             BuildingEdgeMatcher matcher) {
 
-        SearchResult best =
-                new SearchResult(
-                        0,
-                        0,
-                        Double.MAX_VALUE
-                );
-
-        /*
-         * First pass:
-         *
-         * Search +/- 100 pixels in steps of 5.
-         */
-        for (int y = -100;
-             y <= 100;
-             y += 5) {
-
-            for (int x = -100;
-                 x <= 100;
-                 x += 5) {
-
-                double error =
-                        matcher.calculateError(
-                                x,
-                                y
-                        );
-
-                if (error < best.error) {
-
-                    best =
-                            new SearchResult(
-                                    x,
-                                    y,
-                                    error
-                            );
-                }
-            }
-        }
-
-        /*
-         * Second pass:
-         *
-         * Refine around the coarse result.
-         */
-        double centerX =
-                best.x;
-
-        double centerY =
-                best.y;
-
-        SearchResult refined =
-                new SearchResult(
-                        centerX,
-                        centerY,
-                        best.error
-                );
-
-        for (double y = centerY - 2;
-             y <= centerY + 2;
-             y += 0.25) {
-
-            for (double x = centerX - 2;
-                 x <= centerX + 2;
-                 x += 0.25) {
-
-                double error =
-                        matcher.calculateError(
-                                x,
-                                y
-                        );
-
-                if (error < refined.error) {
-
-                    refined =
-                            new SearchResult(
-                                    x,
-                                    y,
-                                    error
-                            );
-                }
-            }
-        }
-
-        return refined;
+        return OffsetSearch.minimize(
+                matcher::calculateError
+        );
     }
 
     private void createCannyDebugImages(
