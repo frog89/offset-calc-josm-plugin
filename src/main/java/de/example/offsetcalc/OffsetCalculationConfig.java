@@ -24,13 +24,15 @@ public class OffsetCalculationConfig {
     private final double buildingSearchRadiusMeters;
     private final double paddingMeters;
     private final boolean selectedBuildingsOnly;
+    private final boolean applyResult;
 
     public OffsetCalculationConfig(
             double testOffsetX,
             double testOffsetY,
             double buildingSearchRadiusMeters,
             double paddingMeters,
-            boolean selectedBuildingsOnly) {
+            boolean selectedBuildingsOnly,
+            boolean applyResult) {
 
         this.testOffsetX = testOffsetX;
         this.testOffsetY = testOffsetY;
@@ -40,6 +42,7 @@ public class OffsetCalculationConfig {
                 paddingMeters;
         this.selectedBuildingsOnly =
                 selectedBuildingsOnly;
+        this.applyResult = applyResult;
     }
 
     public double getTestOffsetX() {
@@ -62,6 +65,10 @@ public class OffsetCalculationConfig {
         return selectedBuildingsOnly;
     }
 
+    public boolean isApplyResult() {
+        return applyResult;
+    }
+
     @Override
     public String toString() {
 
@@ -75,6 +82,8 @@ public class OffsetCalculationConfig {
                 + ", paddingMeters="
                 + paddingMeters
                 + ", selectedBuildingsOnly="
+                + selectedBuildingsOnly
+                + ", applyResult="
                 + selectedBuildingsOnly
                 + '}';
     }

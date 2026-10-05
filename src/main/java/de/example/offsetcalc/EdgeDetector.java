@@ -164,14 +164,15 @@ public final class EdgeDetector {
                 edges50_150
         );
 
-        edges20_60.release();
-        edges50_150.release();
-
         source.release();
         gray.release();
         blurred.release();
 
-        return edges30_90;
+        edges20_60.release();
+        edges30_90.release();
+        //edges50_150.release();
+
+        return edges50_150;
     }
 
     private static Mat bufferedImageToMat(

@@ -123,6 +123,11 @@ public class AdjustOffsetAction extends AbstractAction {
                         && object.get("SelectedBuildingsOnly")
                         .getAsBoolean();
 
+        boolean applyResult =
+                object.has("ApplyResult")
+                        && object.get("ApplyResult")
+                        .getAsBoolean();
+
         if (!Double.isFinite(buildingSearchRadiusMeters)
                 || buildingSearchRadiusMeters < 0) {
 
@@ -144,7 +149,8 @@ public class AdjustOffsetAction extends AbstractAction {
                 testOffsetY,
                 buildingSearchRadiusMeters,
                 paddingMeters,
-                selectedBuildingsOnly
+                selectedBuildingsOnly,
+                applyResult
         );
     }
 
@@ -174,7 +180,11 @@ public class AdjustOffsetAction extends AbstractAction {
                 return;
             }
 
-            calculator.apply(result);
+            if (!config.isApplyResult()) {
+                ConsoleUtil.log("Apply Result is disabled !!!");
+            } else {
+                calculator.applyResult(result);
+            }
 
             JOptionPane.showMessageDialog(
                     MainApplication.getMainFrame(),

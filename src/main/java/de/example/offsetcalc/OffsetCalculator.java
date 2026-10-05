@@ -223,17 +223,24 @@ public class OffsetCalculator {
                     )
             );
 
-            /*
-             * The matcher still uses the old coordinate
-             * system. The conversion from MapView
-             * coordinates to cropped-image coordinates
-             * will be handled separately.
-             */
+            java.awt.Point imageOrigin =
+                    getAnalysisImageOrigin(
+                            analysisDataBounds,
+                            config.getPaddingMeters()
+                    );
+
             int imageOriginX =
-                    0;
+                    imageOrigin.x;
 
             int imageOriginY =
-                    0;
+                    imageOrigin.y;
+
+            ConsoleUtil.log(
+                    "analysis image origin: x="
+                            + imageOriginX
+                            + ", y="
+                            + imageOriginY
+            );
 
             BuildingEdgeMatcher matcher =
                     new BuildingEdgeMatcher(
@@ -256,6 +263,13 @@ public class OffsetCalculator {
             matcher.logBuildingErrorStatistics(
                     best.x,
                     best.y
+            );
+
+            ConsoleUtil.log(
+                    "building matching: candidates="
+                            + matcher.getCandidateBuildingCount()
+                            + ", withEdges="
+                            + matcher.getBuildingWithEdgesCount()
             );
 
             double eastPerPixel =
@@ -896,11 +910,7 @@ public class OffsetCalculator {
     /**
      * Apply result to JOSM.
      */
-    public void apply(
-            OffsetResult result) {
-        ConsoleUtil.log("Apply Offset is disabled !!!");
-        if (1 == 1) return;
-
+    public void applyResult(OffsetResult result) {
         Projection projection =
                 MainApplication.getMap()
                         .mapView
@@ -1152,6 +1162,68 @@ public class OffsetCalculator {
         );
 
         return cropped;
+    }
+
+    private java.awt.Point getAnalysisImageOrigin(
+            java.awt.Rectangle dataBounds,
+            double paddingMeters) {
+
+        if (dataBounds == null
+                || dataBounds.width <= 0
+                || dataBounds.height <= 0) {
+
+            throw new IllegalArgumentException(
+                    "Invalid data bounds."
+            );
+        }
+
+        if (paddingMeters < 0.0) {
+            throw new IllegalArgumentException(
+                    "Padding must not be negative."
+            );
+        }
+
+        double mapViewScale =
+                mapView.getScale();
+
+        if (mapViewScale <= 0.0
+                || !Double.isFinite(mapViewScale)) {
+
+            throw new IllegalStateException(
+                    "MapView has no usable scale."
+            );
+        }
+
+        int paddingPixels =
+                (int) Math.ceil(
+                        paddingMeters
+                                / mapViewScale
+                );
+
+        int originX =
+                dataBounds.x
+                        - paddingPixels;
+
+        int originY =
+                dataBounds.y
+                        - paddingPixels;
+
+        originX =
+                Math.max(
+                        0,
+                        originX
+                );
+
+        originY =
+                Math.max(
+                        0,
+                        originY
+                );
+
+        return new java.awt.Point(
+                originX,
+                originY
+        );
     }
 
     private static final class AnalysisViewport {
