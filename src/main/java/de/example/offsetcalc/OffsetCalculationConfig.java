@@ -22,16 +22,20 @@ public class OffsetCalculationConfig {
     public double testOffsetX;
     public double testOffsetY;
     public double buildingSearchRadiusMeters;
+    public boolean selectedBuildingsOnly;
 
     public OffsetCalculationConfig(
             double testOffsetX,
             double testOffsetY,
-            double buildingSearchRadiusMeters) {
+            double buildingSearchRadiusMeters,
+            boolean selectedBuildingsOnly) {
 
         this.testOffsetX = testOffsetX;
         this.testOffsetY = testOffsetY;
         this.buildingSearchRadiusMeters =
                 buildingSearchRadiusMeters;
+        this.selectedBuildingsOnly =
+                selectedBuildingsOnly;
     }
 
     @Override
@@ -41,6 +45,8 @@ public class OffsetCalculationConfig {
                 ", testOffsetY=" + testOffsetY +
                 ", buildingSearchRadiusMeters=" +
                 buildingSearchRadiusMeters +
+                ", selectedBuildingsOnly=" +
+                selectedBuildingsOnly +
                 '}';
     }
 }

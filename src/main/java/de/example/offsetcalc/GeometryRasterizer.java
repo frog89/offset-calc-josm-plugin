@@ -17,6 +17,7 @@
 
 package de.example.offsetcalc;
 
+import org.openstreetmap.josm.data.ProjectionBounds;
 import org.openstreetmap.josm.data.osm.Node;
 import org.openstreetmap.josm.data.osm.Way;
 import org.openstreetmap.josm.gui.MapView;
@@ -26,7 +27,9 @@ import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
+import java.util.List;
 
 public final class GeometryRasterizer {
 
@@ -36,145 +39,144 @@ public final class GeometryRasterizer {
     public static BufferedImage rasterize(
             OsmDataLayer dataLayer,
             MapView mapView,
-            double offsetX,
-            double offsetY) {
-
-        int width =
-                mapView.getWidth();
-
-        int height =
-                mapView.getHeight();
+            int width,
+            int height,
+            double scale,
+            boolean selectedBuildingsOnly) {
 
         BufferedImage image =
                 new BufferedImage(
                         width,
                         height,
-                        BufferedImage.TYPE_BYTE_GRAY
+                        BufferedImage.TYPE_INT_ARGB
                 );
 
-        Graphics2D g =
+        Graphics2D graphics =
                 image.createGraphics();
 
-        final int[] wayCount = {0};
-        final int[] closedWayCount = {0};
+        try {
 
-        g.setRenderingHint(
-                RenderingHints.KEY_ANTIALIASING,
-                RenderingHints.VALUE_ANTIALIAS_OFF
-        );
+            graphics.setComposite(
+                    java.awt.AlphaComposite.Clear
+            );
 
-        g.setColor(Color.BLACK);
+            graphics.fillRect(
+                    0,
+                    0,
+                    width,
+                    height
+            );
 
-        g.fillRect(
-                0,
-                0,
-                width,
-                height
-        );
+            graphics.setComposite(
+                    java.awt.AlphaComposite.SrcOver
+            );
 
-        g.setColor(Color.WHITE);
+            graphics.setRenderingHint(
+                    RenderingHints.KEY_ANTIALIASING,
+                    RenderingHints.VALUE_ANTIALIAS_ON
+            );
 
-        /*
-         * 2 pixels is deliberately slightly thicker than
-         * a one-pixel line. This makes the distance function
-         * less sensitive to sub-pixel rounding.
-         */
-        g.setStroke(
-                new BasicStroke(
-                        2.0f,
-                        BasicStroke.CAP_ROUND,
-                        BasicStroke.JOIN_ROUND
-                )
-        );
+            graphics.setColor(
+                    java.awt.Color.WHITE
+            );
 
-        dataLayer.getDataSet()
-                .allNonDeletedCompletePrimitives()
-                .forEach(
-                        primitive -> {
+            /*
+             * Die Strichbreite bezieht sich auf das fertige
+             * Analysebild.
+             */
+            graphics.setStroke(
+                    new BasicStroke(
+                            2.0f,
+                            BasicStroke.CAP_ROUND,
+                            BasicStroke.JOIN_ROUND
+                    )
+            );
 
-                            if (!(primitive instanceof Way)) {
-                                return;
-                            }
+            Iterable<Way> ways;
 
-                            Way way = (Way) primitive;
+            if (selectedBuildingsOnly) {
 
-                            wayCount[0]++;
-                            if (way.isClosed()) {
-                                closedWayCount[0]++;
-                            }
+                ways =
+                        dataLayer.getDataSet()
+                                .getSelectedWays();
 
-                            if (FilterUtil.filterOutWay(way)) {
-                                return;
-                            }
+            } else {
 
-                            for (
-                                    int i = 0;
-                                    i < way.getNodesCount() - 1;
-                                    i++
-                            ) {
+                ways =
+                        dataLayer.getDataSet()
+                                .getWays();
+            }
 
-                                Node a =
-                                        way.getNode(i);
+            for (Way way : ways) {
 
-                                Node b =
-                                        way.getNode(i + 1);
+                if (FilterUtil.filterOutWay(way)) {
+                    continue;
+                }
 
-                                if (a.isIncomplete()
-                                        || b.isIncomplete()) {
-                                    continue;
-                                }
+                List<Node> nodes =
+                        way.getNodes();
 
-                                java.awt.geom.Point2D pa =
-                                        mapView.getPoint2D(
-                                                a.getEastNorth()
-                                        );
+                if (nodes.size() < 2) {
+                    continue;
+                }
 
-                                java.awt.geom.Point2D pb =
-                                        mapView.getPoint2D(
-                                                b.getEastNorth()
-                                        );
+                Path2D path =
+                        new Path2D.Double();
 
-                                java.awt.geom.Point2D shiftedPa =
-                                        new java.awt.geom.Point2D.Double(
-                                                pa.getX() + offsetX,
-                                                pa.getY() + offsetY
-                                        );
+                boolean firstPoint = true;
 
-                                java.awt.geom.Point2D shiftedPb =
-                                        new java.awt.geom.Point2D.Double(
-                                                pb.getX() + offsetX,
-                                                pb.getY() + offsetY
-                                        );
+                for (Node node : nodes) {
 
-                                if (isOutside(
-                                        shiftedPa,
-                                        width,
-                                        height
-                                ) && isOutside(
-                                        shiftedPb,
-                                        width,
-                                        height
-                                )) {
-                                    continue;
-                                }
+                    if (node == null
+                            || node.isDeleted()
+                            || node.isIncomplete()) {
 
-                                g.drawLine(
-                                        (int) Math.round(shiftedPa.getX()),
-                                        (int) Math.round(shiftedPa.getY()),
-                                        (int) Math.round(shiftedPb.getX()),
-                                        (int) Math.round(shiftedPb.getY())
-                                );                            }
-                        }
-                );
+                        continue;
+                    }
 
-        System.out.println(
-                "OffsetCalc: ways="
-                        + wayCount[0]
-                        + ", closed="
-                        + closedWayCount[0]
-        );
+                    java.awt.geom.Point2D point =
+                            mapView.getPoint2D(
+                                    node.getEastNorth()
+                            );
 
-        g.dispose();
+                    double x =
+                            point.getX() * scale;
+
+                    double y =
+                            point.getY() * scale;
+
+                    if (firstPoint) {
+
+                        path.moveTo(
+                                x,
+                                y
+                        );
+
+                        firstPoint = false;
+
+                    } else {
+
+                        path.lineTo(
+                                x,
+                                y
+                        );
+                    }
+                }
+
+                if (firstPoint) {
+                    continue;
+                }
+
+                if (way.isClosed()) {
+                    path.closePath();
+                }
+
+                graphics.draw(path);
+            }
+
+        } finally {
+            graphics.dispose();
+        }
 
         return image;
     }

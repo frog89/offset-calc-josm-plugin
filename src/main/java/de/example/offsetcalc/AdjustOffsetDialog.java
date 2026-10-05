@@ -47,7 +47,8 @@ public class AdjustOffsetDialog extends JDialog {
             {
               "TestOffsetX": 0.0,
               "TestOffsetY": 0.0,
-              "BuildingSearchRadiusMeters": 10.0
+              "BuildingSearchRadiusMeters": 6.0,
+              "SelectedBuildingsOnly": false
             }
             """;
 

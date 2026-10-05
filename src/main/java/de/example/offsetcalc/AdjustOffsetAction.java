@@ -114,6 +114,11 @@ public class AdjustOffsetAction extends AbstractAction {
                 object.get("BuildingSearchRadiusMeters")
                         .getAsDouble();
 
+        boolean selectedBuildingsOnly =
+                object.has("SelectedBuildingsOnly")
+                        && object.get("SelectedBuildingsOnly")
+                        .getAsBoolean();
+
         if (!Double.isFinite(buildingSearchRadiusMeters)
                 || buildingSearchRadiusMeters < 0) {
 
@@ -125,7 +130,8 @@ public class AdjustOffsetAction extends AbstractAction {
         return new OffsetCalculationConfig(
                 testOffsetX,
                 testOffsetY,
-                buildingSearchRadiusMeters
+                buildingSearchRadiusMeters,
+                selectedBuildingsOnly
         );
     }
 

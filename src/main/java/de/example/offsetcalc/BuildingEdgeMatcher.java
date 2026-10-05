@@ -57,7 +57,10 @@ public final class BuildingEdgeMatcher {
             Mat imageryEdges,
             double radiusMeters,
             double testOffsetX,
-            double testOffsetY) {
+            double testOffsetY,
+            boolean selectedBuildingsOnly,
+            int imageOriginX,
+            int imageOriginY) {
 
         this.radiusMeters = radiusMeters;
         this.testOffsetX = testOffsetX;
@@ -96,8 +99,22 @@ public final class BuildingEdgeMatcher {
         double radiusPixels =
                 radiusMeters / metersPerPixel;
 
-        for (Way way :
-                dataLayer.getDataSet().getWays()) {
+        Iterable<Way> ways;
+
+        if (selectedBuildingsOnly) {
+
+            ways =
+                    dataLayer.getDataSet()
+                            .getSelectedWays();
+
+        } else {
+
+            ways =
+                    dataLayer.getDataSet()
+                            .getWays();
+        }
+
+        for (Way way : ways) {
 
             if (FilterUtil.filterOutWay(way)) {
                 continue;
@@ -110,7 +127,9 @@ public final class BuildingEdgeMatcher {
                             way,
                             mapView,
                             imageryEdges,
-                            radiusPixels
+                            radiusPixels,
+                            imageOriginX,
+                            imageOriginY
                     );
 
             if (match != null) {
@@ -203,12 +222,16 @@ public final class BuildingEdgeMatcher {
             Way way,
             MapView mapView,
             Mat imageryEdges,
-            double radiusPixels) {
+            double radiusPixels,
+            int imageOriginX,
+            int imageOriginY) {
 
         List<Point2D> points =
                 getWayPoints(
                         way,
-                        mapView
+                        mapView,
+                        imageOriginX,
+                        imageOriginY
                 );
 
         if (points.size() < 2) {
@@ -309,7 +332,9 @@ public final class BuildingEdgeMatcher {
                             x,
                             0
                     );
+
                 } else {
+
                     selectedEdgePixels++;
                 }
             }
@@ -547,7 +572,9 @@ public final class BuildingEdgeMatcher {
 
     private List<Point2D> getWayPoints(
             Way way,
-            MapView mapView) {
+            MapView mapView,
+            int imageOriginX,
+            int imageOriginY) {
 
         List<Point2D> points =
                 new ArrayList<>();
@@ -559,9 +586,17 @@ public final class BuildingEdgeMatcher {
                 continue;
             }
 
-            points.add(
+            Point2D mapPoint =
                     mapView.getPoint2D(
                             node.getEastNorth()
+                    );
+
+            points.add(
+                    new Point2D.Double(
+                            mapPoint.getX()
+                                    - imageOriginX,
+                            mapPoint.getY()
+                                    - imageOriginY
                     )
             );
         }
@@ -842,6 +877,139 @@ public final class BuildingEdgeMatcher {
         private void release() {
             imageryDistance.release();
         }
+    }
+
+    public void logBuildingErrorStatistics(
+            double dx,
+            double dy) {
+
+        List<Double> errors =
+                new ArrayList<>();
+
+        for (BuildingMatch match :
+                matches) {
+
+            ErrorStatistics statistics =
+                    match.calculateError(
+                            dx + testOffsetX,
+                            dy + testOffsetY
+                    );
+
+            if (statistics.pointCount == 0) {
+                continue;
+            }
+
+            double error =
+                    Math.sqrt(
+                            statistics.totalSquaredError
+                                    / statistics.pointCount
+                    );
+
+            if (Double.isFinite(error)) {
+                errors.add(error);
+            }
+        }
+
+        if (errors.isEmpty()) {
+            ConsoleUtil.log(
+                    "building error statistics: no data"
+            );
+            return;
+        }
+
+        errors.sort(
+                Double::compareTo
+        );
+
+        double sum = 0.0;
+
+        for (double error : errors) {
+            sum += error;
+        }
+
+        double mean =
+                sum / errors.size();
+
+        double median =
+                percentile(
+                        errors,
+                        50.0
+                );
+
+        double p90 =
+                percentile(
+                        errors,
+                        90.0
+                );
+
+        double p95 =
+                percentile(
+                        errors,
+                        95.0
+                );
+
+        double minimum =
+                errors.get(0);
+
+        double maximum =
+                errors.get(
+                        errors.size() - 1
+                );
+
+        ConsoleUtil.log(
+                "building error statistics: count="
+                        + errors.size()
+                        + ", min="
+                        + minimum
+                        + ", median="
+                        + median
+                        + ", mean="
+                        + mean
+                        + ", p90="
+                        + p90
+                        + ", p95="
+                        + p95
+                        + ", max="
+                        + maximum
+        );
+    }
+
+    private double percentile(
+            List<Double> values,
+            double percentile) {
+
+        if (values.isEmpty()) {
+            return Double.NaN;
+        }
+
+        if (values.size() == 1) {
+            return values.get(0);
+        }
+
+        double position =
+                percentile
+                        / 100.0
+                        * (values.size() - 1);
+
+        int lower =
+                (int) Math.floor(position);
+
+        int upper =
+                (int) Math.ceil(position);
+
+        if (lower == upper) {
+            return values.get(lower);
+        }
+
+        double fraction =
+                position - lower;
+
+        return values.get(lower)
+                + fraction
+                * (
+                values.get(upper)
+                        - values.get(lower)
+        );
     }
 
     private static final class ErrorStatistics {

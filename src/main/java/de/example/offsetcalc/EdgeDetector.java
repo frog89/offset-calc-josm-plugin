@@ -19,8 +19,10 @@ package de.example.offsetcalc;
 
 import nu.pattern.OpenCV;
 
+import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 
 import java.awt.image.BufferedImage;
@@ -50,7 +52,9 @@ public final class EdgeDetector {
         initialize();
 
         Mat source =
-                bufferedImageToMat(image);
+                bufferedImageToMat(
+                        image
+                );
 
         Mat gray =
                 new Mat();
@@ -78,37 +82,96 @@ public final class EdgeDetector {
         Imgproc.GaussianBlur(
                 gray,
                 blurred,
-                new org.opencv.core.Size(5, 5),
+                new org.opencv.core.Size(
+                        5,
+                        5
+                ),
                 1.2
         );
 
-        Mat edges =
+        Mat edges20_60 =
+                new Mat();
+
+        Mat edges30_90 =
+                new Mat();
+
+        Mat edges50_150 =
                 new Mat();
 
         Imgproc.Canny(
                 blurred,
-                edges,
+                edges20_60,
+                20,
+                60
+        );
+
+        Imgproc.Canny(
+                blurred,
+                edges30_90,
+                30,
+                90
+        );
+
+        Imgproc.Canny(
+                blurred,
+                edges50_150,
                 50,
                 150
         );
 
-        java.io.File tempDirectory =
-                new java.io.File("D:\\temp");
+        long count20_60 =
+                Core.countNonZero(
+                        edges20_60
+                );
 
-        if (!tempDirectory.exists()) {
-            tempDirectory.mkdirs();
-        }
+        long count30_90 =
+                Core.countNonZero(
+                        edges30_90
+                );
 
-        org.opencv.imgcodecs.Imgcodecs.imwrite(
-                "D:\\temp\\imagery-canny.png",
-                edges
+        long count50_150 =
+                Core.countNonZero(
+                        edges50_150
+                );
+
+        ConsoleUtil.log(
+                "Canny 20/60 edge pixels="
+                        + count20_60
         );
+
+        ConsoleUtil.log(
+                "Canny 30/90 edge pixels="
+                        + count30_90
+        );
+
+        ConsoleUtil.log(
+                "Canny 50/150 edge pixels="
+                        + count50_150
+        );
+
+        Imgcodecs.imwrite(
+                "D:\\temp\\offset-canny-20-60.png",
+                edges20_60
+        );
+
+        Imgcodecs.imwrite(
+                "D:\\temp\\offset-canny-30-90.png",
+                edges30_90
+        );
+
+        Imgcodecs.imwrite(
+                "D:\\temp\\offset-canny-50-150.png",
+                edges50_150
+        );
+
+        edges20_60.release();
+        edges50_150.release();
 
         source.release();
         gray.release();
         blurred.release();
 
-        return edges;
+        return edges30_90;
     }
 
     private static Mat bufferedImageToMat(

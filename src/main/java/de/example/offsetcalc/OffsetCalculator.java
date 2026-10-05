@@ -20,11 +20,17 @@ package de.example.offsetcalc;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 
+import org.openstreetmap.josm.data.ProjectionBounds;
+import org.openstreetmap.josm.data.ViewportData;
 import org.openstreetmap.josm.data.coor.EastNorth;
+import org.openstreetmap.josm.data.imagery.OffsetBookmark;
+import org.openstreetmap.josm.data.projection.Projection;
 import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapView;
 import org.openstreetmap.josm.gui.layer.AbstractTileSourceLayer;
 import org.openstreetmap.josm.gui.layer.OsmDataLayer;
+import org.openstreetmap.josm.data.osm.Node;
+import org.openstreetmap.josm.data.osm.Way;
 
 import javax.imageio.ImageIO;
 import java.awt.Graphics2D;
@@ -65,130 +71,342 @@ public class OffsetCalculator {
         }
 
         ConsoleUtil.log(
-                "config = "
-                        + config
+                "config = " + config
         );
 
-        BufferedImage imagery =
-                renderImagery();
+        if (config.selectedBuildingsOnly
+                && dataLayer.getDataSet()
+                .getSelectedWays()
+                .isEmpty()) {
 
-        Mat imageryEdges =
-                EdgeDetector.detectEdges(
-                        imagery
+            return OffsetResult.invalid(
+                    "No buildings are selected."
+            );
+        }
+
+        java.awt.Rectangle initialDataBounds =
+                getDataLayerBounds(
+                        config.selectedBuildingsOnly
                 );
 
-        BufferedImage geometryImage =
-                renderGeometry();
+        if (initialDataBounds.width <= 0
+                || initialDataBounds.height <= 0) {
 
-        saveDebugImages(
-                imagery,
-                geometryImage
-        );
+            return OffsetResult.invalid(
+                    "No usable building bounds found."
+            );
+        }
 
-        List<Point> imageryEdgePoints =
-                extractPoints(
-                        imageryEdges
+        ProjectionBounds projectionBounds =
+                getProjectionBounds(
+                        initialDataBounds
                 );
 
-        java.awt.Rectangle dataBounds =
-                getDataLayerBounds();
-
-        imageryEdgePoints.removeIf(
-                point -> !dataBounds.contains(
-                        point.x,
-                        point.y
-                )
-        );
-
-        createCannyDebugImages(
-                imageryEdges,
-                imageryEdgePoints
-        );
-
-        BuildingEdgeMatcher matcher =
-                null;
+        ViewportData originalViewport =
+                new ViewportData(
+                        mapView.getCenter(),
+                        mapView.getScale()
+                );
 
         try {
 
-            matcher =
+            AnalysisViewport analysisViewport =
+                    createAnalysisViewport(
+                            projectionBounds
+                    );
+
+            /*
+             * JOSM wird tatsächlich auf den relevanten
+             * geografischen Bereich gezoomt.
+             *
+             * Dabei bleibt das Seitenverhältnis des echten
+             * MapView erhalten.
+             */
+            mapView.zoomTo(
+                    analysisViewport.center,
+                    analysisViewport.scale
+            );
+
+            /*
+             * Nach dem Zoom die Bounding Box nochmals
+             * bestimmen.
+             *
+             * Diese Koordinaten sind jetzt Bildschirmkoordinaten
+             * des tatsächlich verwendeten Analyse-Viewports.
+             */
+            java.awt.Rectangle analysisDataBounds =
+                    getDataLayerBounds(
+                            config.selectedBuildingsOnly
+                    );
+
+            if (analysisDataBounds.width <= 0
+                    || analysisDataBounds.height <= 0) {
+
+                return OffsetResult.invalid(
+                        "No usable building bounds found after zoom."
+                );
+            }
+
+            /*
+             * Gesamten aktuellen JOSM-Viewport rendern.
+             */
+            BufferedImage fullImagery =
+                    renderImagery(
+                            analysisViewport
+                    );
+
+            /*
+             * Genau denselben Bildschirmbereich aus
+             * der Imagery ausschneiden.
+             */
+            BufferedImage imagery =
+                    cropToDataBounds(
+                            fullImagery,
+                            analysisDataBounds,
+                            mapView.getWidth(),
+                            mapView.getHeight()
+                    );
+
+            /*
+             * Geometry wird auf exakt denselben Bereich
+             * gerendert bzw. zugeschnitten.
+             */
+            BufferedImage fullGeometry =
+                    renderGeometry(
+                            analysisViewport,
+                            config.selectedBuildingsOnly
+                    );
+
+            BufferedImage geometryImage =
+                    cropToDataBounds(
+                            fullGeometry,
+                            analysisDataBounds,
+                            mapView.getWidth(),
+                            mapView.getHeight()
+                    );
+
+            /*
+             * Canny erst NACH dem Crop berechnen.
+             */
+            Mat imageryEdges =
+                    EdgeDetector.detectEdges(
+                            imagery
+                    );
+
+            saveDebugImages(
+                    imagery,
+                    geometryImage
+            );
+
+            List<Point> imageryEdgePoints =
+                    extractPoints(
+                            imageryEdges
+                    );
+
+            createCannyDebugImages(
+                    imageryEdges,
+                    imageryEdgePoints,
+                    new java.awt.Rectangle(
+                            0,
+                            0,
+                            imagery.getWidth(),
+                            imagery.getHeight()
+                    )
+            );
+
+            /*
+             * Der Matcher arbeitet jetzt noch mit seinem
+             * bisherigen Koordinatensystem.
+             *
+             * Die Anpassung an das neue Crop-Koordinatensystem
+             * machen wir im nächsten Schritt.
+             */
+            int imageOriginX =
+                    0;
+
+            int imageOriginY =
+                    0;
+
+            BuildingEdgeMatcher matcher =
                     new BuildingEdgeMatcher(
                             dataLayer,
                             mapView,
                             imageryEdges,
                             config.buildingSearchRadiusMeters,
                             config.testOffsetX,
-                            config.testOffsetY
+                            config.testOffsetY,
+                            config.selectedBuildingsOnly,
+                            imageOriginX,
+                            imageOriginY
                     );
-
-            if (matcher.getBuildingWithEdgesCount() == 0) {
-
-                return OffsetResult.invalid(
-                        "No buildings with nearby imagery edges were detected."
-                );
-            }
-
-            if (matcher.getGeometryPointCount() < 100) {
-
-                return OffsetResult.invalid(
-                        "Too few OSM geometry pixels were detected."
-                );
-            }
 
             SearchResult best =
                     search(
                             matcher
                     );
 
+            matcher.logBuildingErrorStatistics(
+                    best.x,
+                    best.y
+            );
+
             double eastPerPixel =
-                    getEastPerPixel();
+                    Math.abs(
+                            getEastPerPixel()
+                    );
 
             double northPerPixel =
-                    getNorthPerPixel();
+                    Math.abs(
+                            getNorthPerPixel()
+                    );
 
-            double east =
+            double eastOffset =
                     -best.x * eastPerPixel;
 
-            double north =
+            double northOffset =
                     -best.y * northPerPixel;
-
-            ConsoleUtil.log(
-                    "result: x="
-                            + best.x
-                            + ", y="
-                            + best.y
-                            + ", east="
-                            + east
-                            + ", north="
-                            + north
-                            + ", error="
-                            + best.error
-            );
 
             return OffsetResult.valid(
                     best.x,
                     best.y,
-                    east,
-                    north,
+                    eastOffset,
+                    northOffset,
                     best.error
             );
 
         } finally {
 
-            if (matcher != null) {
-                matcher.release();
-            }
-
-            imageryEdges.release();
+            mapView.zoomTo(
+                    originalViewport
+            );
         }
     }
 
-    private BufferedImage renderGeometry() {
+    private BufferedImage renderGeometry(
+            AnalysisViewport analysisViewport,
+            boolean selectedBuildingsOnly) {
+
+        int mapViewWidth =
+                mapView.getWidth();
+
+        int mapViewHeight =
+                mapView.getHeight();
+
+        if (mapViewWidth <= 0
+                || mapViewHeight <= 0) {
+
+            throw new IllegalStateException(
+                    "MapView has no usable size."
+            );
+        }
+
+        double scale =
+                (double) analysisViewport.width
+                        / mapViewWidth;
+
         return GeometryRasterizer.rasterize(
                 dataLayer,
                 mapView,
-                0.0,
-                0.0
+                analysisViewport.width,
+                analysisViewport.height,
+                scale,
+                selectedBuildingsOnly
         );
+    }
+
+    /**
+     * Render ONLY the selected imagery layer.
+     */
+    private BufferedImage renderImagery(
+            AnalysisViewport analysisViewport) {
+
+        int mapViewWidth =
+                mapView.getWidth();
+
+        int mapViewHeight =
+                mapView.getHeight();
+
+        if (mapViewWidth <= 0
+                || mapViewHeight <= 0) {
+
+            throw new IllegalStateException(
+                    "MapView has no usable size."
+            );
+        }
+
+        double scale =
+                (double) analysisViewport.width
+                        / mapViewWidth;
+
+        BufferedImage image =
+                new BufferedImage(
+                        analysisViewport.width,
+                        analysisViewport.height,
+                        BufferedImage.TYPE_INT_ARGB
+                );
+
+        Graphics2D graphics =
+                image.createGraphics();
+
+        try {
+
+            graphics.setComposite(
+                    java.awt.AlphaComposite.Clear
+            );
+
+            graphics.fillRect(
+                    0,
+                    0,
+                    analysisViewport.width,
+                    analysisViewport.height
+            );
+
+            graphics.setComposite(
+                    java.awt.AlphaComposite.SrcOver
+            );
+
+            /*
+             * X und Y verwenden exakt denselben Faktor.
+             */
+            graphics.scale(
+                    scale,
+                    scale
+            );
+
+            /*
+             * paintLayer() erwartet einen Graphics-Kontext
+             * für den aktuellen MapView.
+             */
+            graphics.setClip(
+                    0,
+                    0,
+                    mapViewWidth,
+                    mapViewHeight
+            );
+
+            mapView.paintLayer(
+                    imageryLayer,
+                    graphics
+            );
+
+        } finally {
+            graphics.dispose();
+        }
+
+        ConsoleUtil.log(
+                "full imagery raster: width="
+                        + image.getWidth()
+                        + ", height="
+                        + image.getHeight()
+                        + ", mapView="
+                        + mapViewWidth
+                        + "x"
+                        + mapViewHeight
+                        + ", scale="
+                        + scale
+        );
+
+        return image;
     }
 
     private void saveDebugImages(
@@ -217,62 +435,6 @@ public class OffsetCalculator {
 
             throw new RuntimeException(e);
         }
-    }
-
-    /**
-     * Render ONLY the selected imagery layer.
-     */
-    private BufferedImage renderImagery() {
-
-        int width = mapView.getWidth();
-        int height = mapView.getHeight();
-
-        BufferedImage image = new BufferedImage(
-                width,
-                height,
-                BufferedImage.TYPE_INT_ARGB
-        );
-
-        Graphics2D graphics = image.createGraphics();
-
-        try {
-            graphics.setComposite(
-                    java.awt.AlphaComposite.Clear
-            );
-
-            graphics.fillRect(
-                    0,
-                    0,
-                    width,
-                    height
-            );
-
-            graphics.setComposite(
-                    java.awt.AlphaComposite.SrcOver
-            );
-
-            // Wichtig: paintLayer() erwartet einen gültigen Clip.
-            graphics.setClip(
-                    0,
-                    0,
-                    image.getWidth(),
-                    image.getHeight()
-            );
-
-            /*
-             * JOSM exposes paintLayer specifically for
-             * rendering an individual map layer.
-             */
-            mapView.paintLayer(
-                    imageryLayer,
-                    graphics
-            );
-
-        } finally {
-            graphics.dispose();
-        }
-
-        return image;
     }
 
     /**
@@ -368,63 +530,117 @@ public class OffsetCalculator {
 
     private void createCannyDebugImages(
             Mat imageryEdges,
-            List<Point> imageryEdgePoints) {
+            List<Point> imageryEdgePoints,
+            java.awt.Rectangle dataBounds) {
 
-        java.io.File tempDirectory =
-                new java.io.File("D:\\temp");
+        try {
 
-        if (!tempDirectory.exists()) {
-            tempDirectory.mkdirs();
-        }
+            BufferedImage cannyImage =
+                    new BufferedImage(
+                            imageryEdges.cols(),
+                            imageryEdges.rows(),
+                            BufferedImage.TYPE_BYTE_GRAY
+                    );
 
-        org.opencv.imgcodecs.Imgcodecs.imwrite(
-                "D:\\temp\\imagery-canny.png",
-                imageryEdges
-        );
+            byte[] pixels =
+                    new byte[
+                            imageryEdges.cols()
+                                    * imageryEdges.rows()
+                            ];
 
-        Mat imageryEdgesInBounds =
-                Mat.zeros(
-                        imageryEdges.size(),
-                        imageryEdges.type()
-                );
+            imageryEdges.get(
+                    0,
+                    0,
+                    pixels
+            );
 
-        for (Point point : imageryEdgePoints) {
-            int x = (int) point.x;
-            int y = (int) point.y;
+            byte[] targetPixels =
+                    (
+                            (
+                                    java.awt.image.DataBufferByte)
+                                    cannyImage.getRaster()
+                                            .getDataBuffer()
+                    ).getData();
 
-            imageryEdgesInBounds.put(
-                    y,
-                    x,
-                    255
+            System.arraycopy(
+                    pixels,
+                    0,
+                    targetPixels,
+                    0,
+                    pixels.length
+            );
+
+            ImageIO.write(
+                    cannyImage,
+                    "png",
+                    new File(
+                            "D:\\temp\\offset-canny.png"
+                    )
+            );
+
+            ConsoleUtil.log(
+                    "canny image size: width="
+                            + imageryEdges.cols()
+                            + ", height="
+                            + imageryEdges.rows()
+                            + ", edge points="
+                            + imageryEdgePoints.size()
+                            + ", data bounds: x="
+                            + dataBounds.x
+                            + ", y="
+                            + dataBounds.y
+                            + ", width="
+                            + dataBounds.width
+                            + ", height="
+                            + dataBounds.height
+            );
+
+        } catch (IOException e) {
+
+            throw new RuntimeException(
+                    "Could not write Canny debug image.",
+                    e
             );
         }
-
-        org.opencv.imgcodecs.Imgcodecs.imwrite(
-                "D:\\temp\\imagery-canny-bounds.png",
-                imageryEdgesInBounds
-        );
-
-        imageryEdgesInBounds.release();
     }
 
-    private java.awt.Rectangle getDataLayerBounds() {
+    private java.awt.Rectangle getDataLayerBounds(
+            boolean selectedBuildingsOnly) {
 
-        int width = mapView.getWidth();
-        int height = mapView.getHeight();
+        int minX =
+                Integer.MAX_VALUE;
 
-        int minX = width;
-        int minY = height;
-        int maxX = 0;
-        int maxY = 0;
+        int minY =
+                Integer.MAX_VALUE;
 
-        for (org.openstreetmap.josm.data.osm.Way way :
-                dataLayer.getDataSet().getWays()) {
+        int maxX =
+                Integer.MIN_VALUE;
+
+        int maxY =
+                Integer.MIN_VALUE;
+
+        Iterable<Way> ways;
+
+        if (selectedBuildingsOnly) {
+
+            ways =
+                    dataLayer.getDataSet()
+                            .getSelectedWays();
+
+        } else {
+
+            ways =
+                    dataLayer.getDataSet()
+                            .getWays();
+        }
+
+        for (Way way : ways) {
 
             if (FilterUtil.filterOutWay(way)) {
                 continue;
             }
 
-            for (org.openstreetmap.josm.data.osm.Node node :
+            for (Node node :
                     way.getNodes()) {
 
                 if (node.isDeleted()
@@ -438,48 +654,58 @@ public class OffsetCalculator {
                         );
 
                 int x =
-                        (int) Math.round(point.getX());
+                        (int) Math.round(
+                                point.getX()
+                        );
 
                 int y =
-                        (int) Math.round(point.getY());
+                        (int) Math.round(
+                                point.getY()
+                        );
 
-                minX = Math.min(minX, x);
-                minY = Math.min(minY, y);
-                maxX = Math.max(maxX, x);
-                maxY = Math.max(maxY, y);
+                minX =
+                        Math.min(
+                                minX,
+                                x
+                        );
+
+                minY =
+                        Math.min(
+                                minY,
+                                y
+                        );
+
+                maxX =
+                        Math.max(
+                                maxX,
+                                x
+                        );
+
+                maxY =
+                        Math.max(
+                                maxY,
+                                y
+                        );
             }
         }
 
-        if (minX > maxX || minY > maxY) {
+        if (minX > maxX
+                || minY > maxY) {
+
             return new java.awt.Rectangle(
                     0,
                     0,
-                    width,
-                    height
+                    mapView.getWidth(),
+                    mapView.getHeight()
             );
         }
 
         int margin = 10;
 
-        minX = Math.max(
-                0,
-                minX - margin
-        );
-
-        minY = Math.max(
-                0,
-                minY - margin
-        );
-
-        maxX = Math.min(
-                width - 1,
-                maxX + margin
-        );
-
-        maxY = Math.min(
-                height - 1,
-                maxY + margin
-        );
+        minX -= margin;
+        minY -= margin;
+        maxX += margin;
+        maxY += margin;
 
         return new java.awt.Rectangle(
                 minX,
@@ -540,16 +766,139 @@ public class OffsetCalculator {
         return b.north() - a.north();
     }
 
+    private org.openstreetmap.josm.data.ProjectionBounds getProjectionBounds(
+            java.awt.Rectangle screenBounds) {
+
+        org.openstreetmap.josm.data.coor.EastNorth min =
+                mapView.getEastNorth(
+                        screenBounds.x,
+                        screenBounds.y
+                );
+
+        org.openstreetmap.josm.data.coor.EastNorth max =
+                mapView.getEastNorth(
+                        screenBounds.x + screenBounds.width,
+                        screenBounds.y + screenBounds.height
+                );
+
+        double minEast =
+                Math.min(
+                        min.east(),
+                        max.east()
+                );
+
+        double maxEast =
+                Math.max(
+                        min.east(),
+                        max.east()
+                );
+
+        double minNorth =
+                Math.min(
+                        min.north(),
+                        max.north()
+                );
+
+        double maxNorth =
+                Math.max(
+                        min.north(),
+                        max.north()
+                );
+
+        return new org.openstreetmap.josm.data.ProjectionBounds(
+                minEast,
+                minNorth,
+                maxEast,
+                maxNorth
+        );
+    }
+
+    private AnalysisViewport createAnalysisViewport(
+            ProjectionBounds bounds) {
+
+        final int maxRasterSize = 2000;
+
+        int mapViewWidth =
+                mapView.getWidth();
+
+        int mapViewHeight =
+                mapView.getHeight();
+
+        if (mapViewWidth <= 0
+                || mapViewHeight <= 0) {
+
+            throw new IllegalStateException(
+                    "MapView has no usable size."
+            );
+        }
+
+        double rasterScale;
+
+        if (mapViewWidth >= mapViewHeight) {
+
+            rasterScale =
+                    (double) maxRasterSize
+                            / mapViewWidth;
+
+        } else {
+
+            rasterScale =
+                    (double) maxRasterSize
+                            / mapViewHeight;
+        }
+
+        int width =
+                Math.max(
+                        1,
+                        (int) Math.round(
+                                mapViewWidth
+                                        * rasterScale
+                        )
+                );
+
+        int height =
+                Math.max(
+                        1,
+                        (int) Math.round(
+                                mapViewHeight
+                                        * rasterScale
+                        )
+                );
+
+        double mapViewScale =
+                bounds.getScale(
+                        mapViewWidth,
+                        mapViewHeight
+                );
+
+        ConsoleUtil.log(
+                "analysis viewport: mapView="
+                        + mapViewWidth
+                        + "x"
+                        + mapViewHeight
+                        + ", raster="
+                        + width
+                        + "x"
+                        + height
+                        + ", rasterScale="
+                        + rasterScale
+                        + ", mapViewScale="
+                        + mapViewScale
+        );
+
+        return new AnalysisViewport(
+                bounds.getCenter(),
+                mapViewScale,
+                width,
+                height
+        );
+    }
+
     /**
      * Apply result to JOSM.
      */
     public void apply(
             OffsetResult result) {
-        ConsoleUtil.log(
-                "DEBUG: imagery offset application disabled."
-        );
-        return;
-        /*
         Projection projection =
                 MainApplication.getMap()
                         .mapView
@@ -594,6 +943,181 @@ public class OffsetCalculator {
                 );
 
         mapView.repaint();
-        */
+    }
+
+    private BufferedImage cropToDataBounds(
+            BufferedImage source,
+            java.awt.Rectangle dataBounds,
+            int mapViewWidth,
+            int mapViewHeight) {
+
+        if (source == null) {
+            throw new IllegalArgumentException(
+                    "Source image must not be null."
+            );
+        }
+
+        if (dataBounds == null
+                || dataBounds.width <= 0
+                || dataBounds.height <= 0) {
+
+            throw new IllegalArgumentException(
+                    "Invalid data bounds."
+            );
+        }
+
+        if (mapViewWidth <= 0
+                || mapViewHeight <= 0) {
+
+            throw new IllegalArgumentException(
+                    "Invalid MapView dimensions."
+            );
+        }
+
+        double scaleX =
+                (double) source.getWidth()
+                        / mapViewWidth;
+
+        double scaleY =
+                (double) source.getHeight()
+                        / mapViewHeight;
+
+        int sourceX =
+                (int) Math.floor(
+                        dataBounds.x * scaleX
+                );
+
+        int sourceY =
+                (int) Math.floor(
+                        dataBounds.y * scaleY
+                );
+
+        int sourceRight =
+                (int) Math.ceil(
+                        (
+                                dataBounds.x
+                                        + dataBounds.width
+                        ) * scaleX
+                );
+
+        int sourceBottom =
+                (int) Math.ceil(
+                        (
+                                dataBounds.y
+                                        + dataBounds.height
+                        ) * scaleY
+                );
+
+        sourceX =
+                Math.max(
+                        0,
+                        Math.min(
+                                sourceX,
+                                source.getWidth() - 1
+                        )
+                );
+
+        sourceY =
+                Math.max(
+                        0,
+                        Math.min(
+                                sourceY,
+                                source.getHeight() - 1
+                        )
+                );
+
+        sourceRight =
+                Math.max(
+                        sourceX + 1,
+                        Math.min(
+                                sourceRight,
+                                source.getWidth()
+                        )
+                );
+
+        sourceBottom =
+                Math.max(
+                        sourceY + 1,
+                        Math.min(
+                                sourceBottom,
+                                source.getHeight()
+                        )
+                );
+
+        int cropWidth =
+                sourceRight - sourceX;
+
+        int cropHeight =
+                sourceBottom - sourceY;
+
+        BufferedImage cropped =
+                new BufferedImage(
+                        cropWidth,
+                        cropHeight,
+                        BufferedImage.TYPE_INT_ARGB
+                );
+
+        Graphics2D graphics =
+                cropped.createGraphics();
+
+        try {
+
+            graphics.drawImage(
+                    source,
+                    0,
+                    0,
+                    cropWidth,
+                    cropHeight,
+                    sourceX,
+                    sourceY,
+                    sourceRight,
+                    sourceBottom,
+                    null
+            );
+
+        } finally {
+            graphics.dispose();
+        }
+
+        ConsoleUtil.log(
+                "cropped analysis raster: source="
+                        + source.getWidth()
+                        + "x"
+                        + source.getHeight()
+                        + ", bounds="
+                        + dataBounds.x
+                        + ","
+                        + dataBounds.y
+                        + " "
+                        + dataBounds.width
+                        + "x"
+                        + dataBounds.height
+                        + ", result="
+                        + cropWidth
+                        + "x"
+                        + cropHeight
+        );
+
+        return cropped;
+    }
+
+    private static final class AnalysisViewport {
+
+        private final org.openstreetmap.josm.data.coor.EastNorth center;
+        private final double scale;
+        private final int width;
+        private final int height;
+
+        private AnalysisViewport(
+                org.openstreetmap.josm.data.coor.EastNorth center,
+                double scale,
+                int width,
+                int height) {
+
+            this.center = center;
+            this.scale = scale;
+            this.width = width;
+            this.height = height;
+        }
     }
 }
