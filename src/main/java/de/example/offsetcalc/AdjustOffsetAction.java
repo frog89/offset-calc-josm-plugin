@@ -21,8 +21,7 @@ import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.layer.AbstractTileSourceLayer;
 import org.openstreetmap.josm.gui.layer.OsmDataLayer;
 
-import javax.swing.AbstractAction;
-import javax.swing.JOptionPane;
+import javax.swing.*;
 import java.awt.event.ActionEvent;
 
 import com.google.gson.JsonObject;
@@ -156,63 +155,118 @@ public class AdjustOffsetAction extends AbstractAction {
             AbstractTileSourceLayer<?> imageryLayer,
             OffsetCalculationConfig config) {
 
-        try {
-            OffsetCalculator calculator =
-                    new OffsetCalculator(
-                            dataLayer,
-                            imageryLayer,
-                            config
-                    );
-
-            OffsetResult result =
-                    calculator.calculate();
-
-            if (!result.isValid()) {
-                JOptionPane.showMessageDialog(
-                        MainApplication.getMainFrame(),
-                        result.getMessage(),
-                        "Adjust Offset",
-                        JOptionPane.WARNING_MESSAGE
+        OffsetProgressDialog progressDialog =
+                new OffsetProgressDialog(
+                        MainApplication.getMainFrame()
                 );
-                return;
-            }
 
-            if (!config.isApplyResult()) {
-                ConsoleUtil.log("Apply Result is disabled !!!");
-            } else {
-                calculator.applyResult(result);
-            }
+        SwingWorker<OffsetResult, String> worker =
+                new SwingWorker<>() {
 
-            JOptionPane.showMessageDialog(
-                    MainApplication.getMainFrame(),
-                    String.format(
-                            java.util.Locale.ROOT,
-                            "Calculated imagery offset for %d buildings:%n%n"
-                                    + "East:  %.2f Meter (= %.2f Pixel)%n"
-                                    + "North: %.2f Meter (= %.2f Pixel)%n%n"
-                                    + "Error: %.3f",
-                            result.getBuildingCount(),
-                            result.getEastOffset(),
-                            result.getEastPixels(),
-                            result.getNorthOffset(),
-                            result.getNorthPixels(),
-                            result.getError()
-                    ),
-                    "Adjust Offset",
-                    JOptionPane.INFORMATION_MESSAGE
-            );
+                    @Override
+                    protected OffsetResult doInBackground() {
 
-        } catch (Exception ex) {
+                        OffsetCalculator calculator =
+                                new OffsetCalculator(
+                                        dataLayer,
+                                        imageryLayer,
+                                        config,
+                                        this::publish
+                                );
 
-            JOptionPane.showMessageDialog(
-                    MainApplication.getMainFrame(),
-                    "Could not calculate imagery offset:\n\n"
-                            + ex.getMessage(),
-                    "Adjust Offset",
-                    JOptionPane.ERROR_MESSAGE
-            );
+                        return calculator.calculate();
+                    }
 
-            ex.printStackTrace();
-        }
+                    @Override
+                    protected void process(
+                            java.util.List<String> chunks) {
+
+                        if (!chunks.isEmpty()) {
+                            progressDialog.setStatus(
+                                    chunks.get(
+                                            chunks.size() - 1
+                                    )
+                            );
+                        }
+                    }
+
+                    @Override
+                    protected void done() {
+
+                        progressDialog.dispose();
+
+                        try {
+
+                            OffsetResult result =
+                                    get();
+
+                            if (!result.isValid()) {
+
+                                JOptionPane.showMessageDialog(
+                                        MainApplication.getMainFrame(),
+                                        result.getMessage(),
+                                        "Adjust Offset",
+                                        JOptionPane.WARNING_MESSAGE
+                                );
+
+                                return;
+                            }
+
+                            if (config.isApplyResult()) {
+
+                                OffsetCalculator calculator =
+                                        new OffsetCalculator(
+                                                dataLayer,
+                                                imageryLayer,
+                                                config,
+                                                this::publish
+                                        );
+
+                                calculator.applyResult(result);
+
+                            } else {
+
+                                ConsoleUtil.log(
+                                        "Apply Result is disabled !!!"
+                                );
+                            }
+
+                            JOptionPane.showMessageDialog(
+                                    MainApplication.getMainFrame(),
+                                    String.format(
+                                            java.util.Locale.ROOT,
+                                            "Calculated imagery offset for %d buildings:%n%n"
+                                                    + "East:  %.2f Meter (= %.2f Pixel)%n"
+                                                    + "North: %.2f Meter (= %.2f Pixel)%n%n"
+                                                    + "Error: %.3f",
+                                            result.getBuildingCount(),
+                                            result.getEastOffset(),
+                                            result.getEastPixels(),
+                                            result.getNorthOffset(),
+                                            result.getNorthPixels(),
+                                            result.getError()
+                                    ),
+                                    "Adjust Offset",
+                                    JOptionPane.INFORMATION_MESSAGE
+                            );
+
+                        } catch (Exception ex) {
+
+                            JOptionPane.showMessageDialog(
+                                    MainApplication.getMainFrame(),
+                                    "Could not calculate imagery offset:\n\n"
+                                            + ex.getMessage(),
+                                    "Adjust Offset",
+                                    JOptionPane.ERROR_MESSAGE
+                            );
+
+                            ex.printStackTrace();
+                        }
+                    }
+                };
+
+        worker.execute();
+
+        progressDialog.setVisible(true);
     }
 }

@@ -35,30 +35,37 @@ import org.openstreetmap.josm.data.osm.Way;
 import javax.imageio.ImageIO;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.nio.file.Path;
+import java.util.function.Consumer;
 
 public class OffsetCalculator {
     private final OsmDataLayer dataLayer;
     private final AbstractTileSourceLayer<?> imageryLayer;
     private final OffsetCalculationConfig config;
+    private final Consumer<String> progressCallback;
 
     private final MapView mapView;
 
     public OffsetCalculator(
             OsmDataLayer dataLayer,
             AbstractTileSourceLayer<?> imageryLayer,
-            OffsetCalculationConfig config) {
+            OffsetCalculationConfig config,
+            Consumer<String> progressCallback) {
 
         this.dataLayer = dataLayer;
         this.imageryLayer = imageryLayer;
         this.config = config;
+        this.progressCallback = progressCallback;
 
         this.mapView =
                 MainApplication.getMap().mapView;
+    }
+
+    private void report(String message) {
+        progressCallback.accept(message);
     }
 
     public OffsetResult calculate() {
@@ -144,6 +151,7 @@ public class OffsetCalculator {
              * Render the complete current JOSM viewport
              * in its native MapView coordinate system.
              */
+            report("Rendering imagery...");
             BufferedImage fullImagery = renderImagery();
 
             /*
@@ -166,6 +174,7 @@ public class OffsetCalculator {
              * Render geometry in exactly the same
              * MapView coordinate system.
              */
+            report("Rendering geometry...");
             BufferedImage fullGeometry =
                     renderGeometry(
                             config.isSelectedBuildingsOnly()
@@ -186,6 +195,7 @@ public class OffsetCalculator {
             /*
              * Canny is calculated only after the crop.
              */
+            report("Detecting edges (Canny)...");
             Mat imageryEdges =
                     EdgeDetector.detectEdges(
                             imagery
@@ -231,6 +241,7 @@ public class OffsetCalculator {
                             + imageOriginY
             );
 
+            report("Matching buildings...");
             BuildingEdgeMatcher matcher =
                     new BuildingEdgeMatcher(
                             dataLayer,
@@ -244,11 +255,13 @@ public class OffsetCalculator {
                             imageOriginY
                     );
 
+            report("Searching best offset...");
             SearchResult best =
                     search(
                             matcher
                     );
 
+            report("Finalizing...");
             matcher.logBuildingErrorStatistics(
                     best.x,
                     best.y

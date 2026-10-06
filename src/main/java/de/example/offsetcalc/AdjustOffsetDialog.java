@@ -21,15 +21,7 @@ import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.layer.AbstractTileSourceLayer;
 import org.openstreetmap.josm.gui.layer.OsmDataLayer;
 
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JComboBox;
-import javax.swing.JDialog;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JTextArea;
-import javax.swing.JScrollPane;
-import javax.swing.JCheckBox;
+import javax.swing.*;
 
 import java.awt.BorderLayout;
 import java.awt.Dialog;
@@ -37,6 +29,40 @@ import java.awt.GridLayout;
 import java.util.List;
 
 public class AdjustOffsetDialog extends JDialog {
+    private static final String HELP_TEXT =
+            """
+            Adjust Offset - How it works
+    
+            This plugin automatically calculates an offset between
+            an OSM data layer and an imagery layer.
+    
+            Prerequisites:
+            - A data layer with building outlines (tag "building",
+              closed ways) must be loaded.
+            - An imagery layer (e.g. DOP or satellite imagery) must
+              be loaded.
+    
+            Steps:
+            1. Select a data layer and an imagery layer.
+            2. Optionally enable "Selected buildings only" to use
+               only the currently selected buildings.
+            3. Press "OK" to start the calculation.
+    
+            The calculation:
+            - Edges are extracted from the imagery crop
+              (Canny edge detection).
+            - Building outlines from the data layer are rasterized.
+            - The plugin searches for the X/Y shift at which the
+              imagery edges and the building edges match best.
+            - The resulting shift is converted into the current
+              JOSM projection and applied as an imagery offset.
+    
+            Notes:
+            - The calculation requires a visible map view with
+              loaded buildings.
+            - A very small area or missing building edges can
+              degrade the result.
+            """;
 
     private final JComboBox<OsmDataLayer> dataLayerCombo;
     private final JComboBox<AbstractTileSourceLayer<?>> imageryLayerCombo;
@@ -66,12 +92,6 @@ public class AdjustOffsetDialog extends JDialog {
                 "Adjust Offset",
                 Dialog.ModalityType.APPLICATION_MODAL
         );
-
-        selectedBuildingsOnlyCheckBox =
-                new JCheckBox(
-                        "Selected buildings only",
-                        lastSelectedBuildingsOnly
-                );
 
         List<OsmDataLayer> dataLayers =
                 MainApplication.getLayerManager()
@@ -115,6 +135,9 @@ public class AdjustOffsetDialog extends JDialog {
                 new LayerComboBoxRenderer<>()
         );
 
+        /*
+         * Selection panel: data layer, imagery layer, checkbox.
+         */
         JPanel selectionPanel =
                 new JPanel(
                         new GridLayout(2, 2, 8, 8)
@@ -142,15 +165,43 @@ public class AdjustOffsetDialog extends JDialog {
                 imageryLayerCombo
         );
 
-        JPanel optionsPanel = new JPanel(
-                new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0)
+        selectedBuildingsOnlyCheckBox =
+                new JCheckBox(
+                        "Selected buildings only",
+                        lastSelectedBuildingsOnly
+                );
+
+        JPanel optionsPanel =
+                new JPanel(
+                        new java.awt.FlowLayout(
+                                java.awt.FlowLayout.LEFT,
+                                0,
+                                0
+                        )
+                );
+
+        optionsPanel.add(
+                selectedBuildingsOnlyCheckBox
         );
-        optionsPanel.add(selectedBuildingsOnlyCheckBox);
 
-        JPanel northPanel = new JPanel(new BorderLayout(0, 8));
-        northPanel.add(selectionPanel, BorderLayout.NORTH);
-        northPanel.add(optionsPanel, BorderLayout.SOUTH);
+        JPanel northPanel =
+                new JPanel(
+                        new BorderLayout(0, 4)
+                );
 
+        northPanel.add(
+                selectionPanel,
+                BorderLayout.NORTH
+        );
+
+        northPanel.add(
+                optionsPanel,
+                BorderLayout.SOUTH
+        );
+
+        /*
+         * Debug panel: JSON configuration (debug mode only).
+         */
         JPanel debugPanel =
                 new JPanel(
                         new BorderLayout(8, 8)
@@ -174,16 +225,16 @@ public class AdjustOffsetDialog extends JDialog {
                         "offsetcalc.debug"
                 );
 
-        debugPanel.setVisible(
-                debugMode
-        );
-
+        /*
+         * Buttons: OK, Cancel (centered) and "?" (right).
+         */
         JButton okButton =
                 new JButton("OK");
 
         okButton.addActionListener(
                 e -> {
-                    lastDebugConfigJson = debugConfigTextArea.getText();
+                    lastDebugConfigJson =
+                            debugConfigTextArea.getText();
                     lastSelectedBuildingsOnly =
                             selectedBuildingsOnlyCheckBox.isSelected();
                     confirmed = true;
@@ -201,12 +252,67 @@ public class AdjustOffsetDialog extends JDialog {
                 }
         );
 
+        JButton helpButton =
+                new JButton("?");
+
+        helpButton.setMargin(
+                new java.awt.Insets(2, 6, 2, 6)
+        );
+
+        helpButton.setToolTipText(
+                "Show help"
+        );
+
+        helpButton.addActionListener(
+                e -> JOptionPane.showMessageDialog(
+                        AdjustOffsetDialog.this,
+                        HELP_TEXT,
+                        "Adjust Offset - Help",
+                        JOptionPane.INFORMATION_MESSAGE
+                )
+        );
+
+        JPanel actionButtonPanel =
+                new JPanel(
+                        new java.awt.FlowLayout(
+                                java.awt.FlowLayout.CENTER,
+                                8,
+                                0
+                        )
+                );
+
+        actionButtonPanel.add(okButton);
+        actionButtonPanel.add(cancelButton);
+
+        JPanel helpButtonPanel =
+                new JPanel(
+                        new java.awt.FlowLayout(
+                                java.awt.FlowLayout.RIGHT,
+                                0,
+                                0
+                        )
+                );
+
+        helpButtonPanel.add(helpButton);
+
         JPanel buttonPanel =
-                new JPanel();
+                new JPanel(
+                        new BorderLayout()
+                );
 
-        buttonPanel.add(okButton);
-        buttonPanel.add(cancelButton);
+        buttonPanel.add(
+                actionButtonPanel,
+                BorderLayout.CENTER
+        );
 
+        buttonPanel.add(
+                helpButtonPanel,
+                BorderLayout.EAST
+        );
+
+        /*
+         * Layout assembly.
+         */
         setLayout(
                 new BorderLayout()
         );
@@ -236,6 +342,25 @@ public class AdjustOffsetDialog extends JDialog {
         add(
                 buttonPanel,
                 BorderLayout.SOUTH
+        );
+
+        /*
+         * ENTER triggers OK, ESC triggers Cancel.
+         */
+        getRootPane().setDefaultButton(
+                okButton
+        );
+
+        getRootPane().registerKeyboardAction(
+                e -> {
+                    confirmed = false;
+                    dispose();
+                },
+                javax.swing.KeyStroke.getKeyStroke(
+                        java.awt.event.KeyEvent.VK_ESCAPE,
+                        0
+                ),
+                javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW
         );
 
         pack();
