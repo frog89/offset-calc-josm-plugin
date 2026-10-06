@@ -23,7 +23,8 @@
         <!-- Use the Java version required by your JOSM checkout -->
         <maven.compiler.release>17</maven.compiler.release>
 
-        <josm.revision>19627</josm.revision>
+        <!--<josm.revision>19627</josm.revision>-->
+        <josm.revision>19613</josm.revision>
         <opencv.version>4.9.0-0</opencv.version>
     </properties>
 
@@ -91,6 +92,7 @@
                         </goals>
 
                         <configuration>
+                            <finalName>offset-calc-josm-plugin</finalName>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
 
                             <artifactSet>
