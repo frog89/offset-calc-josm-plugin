@@ -84,7 +84,7 @@ public class OffsetCalculationConfig {
                 + ", selectedBuildingsOnly="
                 + selectedBuildingsOnly
                 + ", applyResult="
-                + selectedBuildingsOnly
+                + applyResult
                 + '}';
     }
 }

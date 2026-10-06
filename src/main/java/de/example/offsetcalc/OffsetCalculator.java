@@ -352,7 +352,6 @@ public class OffsetCalculator {
                 mapView,
                 mapViewWidth,
                 mapViewHeight,
-                1.0,
                 selectedBuildingsOnly
         );
     }

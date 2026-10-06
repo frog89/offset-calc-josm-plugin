@@ -41,7 +41,6 @@ public final class GeometryRasterizer {
             MapView mapView,
             int width,
             int height,
-            double scale,
             boolean selectedBuildingsOnly) {
 
         BufferedImage image =
@@ -139,11 +138,8 @@ public final class GeometryRasterizer {
                                     node.getEastNorth()
                             );
 
-                    double x =
-                            point.getX() * scale;
-
-                    double y =
-                            point.getY() * scale;
+                    double x = point.getX();
+                    double y = point.getY();
 
                     if (firstPoint) {
 
@@ -179,16 +175,5 @@ public final class GeometryRasterizer {
         }
 
         return image;
-    }
-
-    private static boolean isOutside(
-            java.awt.geom.Point2D p,
-            int width,
-            int height) {
-
-        return p.getX() < 0
-                || p.getX() >= width
-                || p.getY() < 0
-                || p.getY() >= height;
     }
 }

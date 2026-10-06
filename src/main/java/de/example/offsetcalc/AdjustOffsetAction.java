@@ -73,7 +73,8 @@ public class AdjustOffsetAction extends AbstractAction {
         try {
             config =
                     parseDebugConfig(
-                            dialog.getDebugConfigJson()
+                            dialog.getDebugConfigJson(),
+                            dialog.isSelectedBuildingsOnly()
                     );
         } catch (Exception ex) {
 
@@ -96,7 +97,8 @@ public class AdjustOffsetAction extends AbstractAction {
     }
 
     private OffsetCalculationConfig parseDebugConfig(
-            String json) {
+            String json,
+            boolean selectedBuildingsOnly) {
 
         JsonObject object =
                 JsonParser.parseString(json)
@@ -117,11 +119,6 @@ public class AdjustOffsetAction extends AbstractAction {
         double paddingMeters =
                 object.get("PaddingMeters")
                         .getAsDouble();
-
-        boolean selectedBuildingsOnly =
-                object.has("SelectedBuildingsOnly")
-                        && object.get("SelectedBuildingsOnly")
-                        .getAsBoolean();
 
         boolean applyResult =
                 object.has("ApplyResult")

@@ -29,6 +29,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
 import javax.swing.JScrollPane;
+import javax.swing.JCheckBox;
 
 import java.awt.BorderLayout;
 import java.awt.Dialog;
@@ -40,6 +41,7 @@ public class AdjustOffsetDialog extends JDialog {
     private final JComboBox<OsmDataLayer> dataLayerCombo;
     private final JComboBox<AbstractTileSourceLayer<?>> imageryLayerCombo;
     private final JTextArea debugConfigTextArea;
+    private final JCheckBox selectedBuildingsOnlyCheckBox;
 
     private static String lastDebugConfigJson;
     private static final String DEFAULT_DEBUG_CONFIG =
@@ -49,7 +51,6 @@ public class AdjustOffsetDialog extends JDialog {
               "TestOffsetY": 0.0,
               "BuildingSearchRadiusMeters": 10.0,
               "PaddingMeters": 12.0,
-              "SelectedBuildingsOnly": false,
               "ApplyResult": true
             }
             """;
@@ -63,6 +64,9 @@ public class AdjustOffsetDialog extends JDialog {
                 "Adjust Offset",
                 Dialog.ModalityType.APPLICATION_MODAL
         );
+
+        selectedBuildingsOnlyCheckBox =
+                new JCheckBox("Selected buildings only");
 
         List<OsmDataLayer> dataLayers =
                 MainApplication.getLayerManager()
@@ -133,6 +137,15 @@ public class AdjustOffsetDialog extends JDialog {
                 imageryLayerCombo
         );
 
+        JPanel optionsPanel = new JPanel(
+                new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0)
+        );
+        optionsPanel.add(selectedBuildingsOnlyCheckBox);
+
+        JPanel northPanel = new JPanel(new BorderLayout(0, 8));
+        northPanel.add(selectionPanel, BorderLayout.NORTH);
+        northPanel.add(optionsPanel, BorderLayout.SOUTH);
+
         JPanel debugPanel =
                 new JPanel(
                         new BorderLayout(8, 8)
@@ -186,7 +199,7 @@ public class AdjustOffsetDialog extends JDialog {
                 );
 
         centerPanel.add(
-                selectionPanel,
+                northPanel,
                 BorderLayout.NORTH
         );
 
@@ -219,6 +232,10 @@ public class AdjustOffsetDialog extends JDialog {
 
     public boolean isConfirmed() {
         return confirmed;
+    }
+
+    public boolean isSelectedBuildingsOnly() {
+        return selectedBuildingsOnlyCheckBox.isSelected();
     }
 
     public OsmDataLayer getDataLayer() {
