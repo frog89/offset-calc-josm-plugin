@@ -30,6 +30,16 @@ public final class OffsetResult {
 
     private final double error;
 
+    private final int buildingCount;
+
+    /*
+     * Pixel shifts that correspond to eastOffset / northOffset.
+     * These carry the correct sign convention of the applied
+     * imagery shift (east = -best.x, north = +best.y).
+     */
+    private final double eastPixels;
+    private final double northPixels;
+
     private OffsetResult(
             boolean valid,
             String message,
@@ -37,7 +47,10 @@ public final class OffsetResult {
             double pixelY,
             double eastOffset,
             double northOffset,
-            double error) {
+            double error,
+            int buildingCount,
+            double eastPixels,
+            double northPixels) {
 
         this.valid = valid;
         this.message = message;
@@ -49,6 +62,11 @@ public final class OffsetResult {
         this.northOffset = northOffset;
 
         this.error = error;
+
+        this.buildingCount = buildingCount;
+
+        this.eastPixels = eastPixels;
+        this.northPixels = northPixels;
     }
 
     public static OffsetResult invalid(
@@ -61,7 +79,10 @@ public final class OffsetResult {
                 0,
                 0,
                 0,
-                Double.NaN
+                Double.NaN,
+                0,
+                0,
+                0
         );
     }
 
@@ -70,7 +91,10 @@ public final class OffsetResult {
             double pixelY,
             double eastOffset,
             double northOffset,
-            double error) {
+            double error,
+            int buildingCount,
+            double eastPixels,
+            double northPixels) {
 
         return new OffsetResult(
                 true,
@@ -79,7 +103,10 @@ public final class OffsetResult {
                 pixelY,
                 eastOffset,
                 northOffset,
-                error
+                error,
+                buildingCount,
+                eastPixels,
+                northPixels
         );
     }
 
@@ -89,14 +116,6 @@ public final class OffsetResult {
 
     public String getMessage() {
         return message;
-    }
-
-    public double getPixelX() {
-        return pixelX;
-    }
-
-    public double getPixelY() {
-        return pixelY;
     }
 
     public double getEastOffset() {
@@ -109,5 +128,17 @@ public final class OffsetResult {
 
     public double getError() {
         return error;
+    }
+
+    public int getBuildingCount() {
+        return buildingCount;
+    }
+
+    public double getEastPixels() {
+        return eastPixels;
+    }
+
+    public double getNorthPixels() {
+        return northPixels;
     }
 }

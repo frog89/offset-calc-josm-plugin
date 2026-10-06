@@ -27,10 +27,19 @@ import org.opencv.imgproc.Imgproc;
 
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 public final class EdgeDetector {
 
     private static boolean initialized;
+
+    /**
+     * System-independent directory for debug output.
+     * Created lazily on first access.
+     */
+    private static Path debugDirectory;
 
     private EdgeDetector() {
     }
@@ -44,6 +53,40 @@ public final class EdgeDetector {
         OpenCV.loadLocally();
 
         initialized = true;
+    }
+
+    /**
+     * Returns (and lazily creates) a unique temp directory
+     * for debug output. The directory lives under the
+     * operating system's temp folder, so it works on
+     * Windows, Linux and macOS.
+     */
+    public static synchronized Path getDebugDirectory() {
+
+        if (debugDirectory == null) {
+
+            try {
+
+                debugDirectory =
+                        Files.createTempDirectory(
+                                "offsetcalc-debug-"
+                        );
+
+                ConsoleUtil.log(
+                        "debug directory = "
+                                + debugDirectory
+                );
+
+            } catch (IOException e) {
+
+                throw new RuntimeException(
+                        "Could not create debug directory.",
+                        e
+                );
+            }
+        }
+
+        return debugDirectory;
     }
 
     public static Mat detectEdges(
@@ -89,6 +132,9 @@ public final class EdgeDetector {
                 1.2
         );
 
+        /*
+         * Fixed reference thresholds, kept for comparison.
+         */
         Mat edges20_60 =
                 new Mat();
 
@@ -119,6 +165,98 @@ public final class EdgeDetector {
                 150
         );
 
+        /*
+         * Otsu-based threshold pair.
+         *
+         * Otsu is computed on the gradient magnitude of the
+         * blurred image. The low threshold is set to a fixed
+         * fraction of the Otsu value (classic Canny practice).
+         */
+        double otsuValue =
+                computeOtsuThreshold(
+                        blurred
+                );
+
+        double otsuLow =
+                Math.max(
+                        1.0,
+                        otsuValue * 0.4
+                );
+
+        double otsuHigh =
+                Math.max(
+                        otsuLow + 1.0,
+                        otsuValue
+                );
+
+        Mat edgesOtsu =
+                new Mat();
+
+        Imgproc.Canny(
+                blurred,
+                edgesOtsu,
+                otsuLow,
+                otsuHigh
+        );
+
+        ConsoleUtil.log(
+                String.format(
+                        java.util.Locale.ROOT,
+                        "Canny Otsu: low=%.2f, high=%.2f",
+                        otsuLow,
+                        otsuHigh
+                )
+        );
+
+        /*
+         * Median-based threshold pair.
+         *
+         * Uses the median of the gradient magnitude and a
+         * sigma factor. Robust against varying brightness
+         * and contrast between different imagery sources.
+         */
+        double medianGradient =
+                computeMedianGradient(
+                        blurred
+                );
+
+        double sigma = 0.33;
+
+        double medianLow =
+                Math.max(
+                        1.0,
+                        medianGradient * (1.0 - sigma)
+                );
+
+        double medianHigh =
+                Math.max(
+                        medianLow + 1.0,
+                        medianGradient * (1.0 + sigma)
+                );
+
+        Mat edgesMedian =
+                new Mat();
+
+        Imgproc.Canny(
+                blurred,
+                edgesMedian,
+                medianLow,
+                medianHigh
+        );
+
+        ConsoleUtil.log(
+                String.format(
+                        java.util.Locale.ROOT,
+                        "Canny median: low=%.2f, high=%.2f (median gradient=%.2f)",
+                        medianLow,
+                        medianHigh,
+                        medianGradient
+                )
+        );
+
+        /*
+         * Statistics + debug output.
+         */
         long count20_60 =
                 Core.countNonZero(
                         edges20_60
@@ -132,6 +270,16 @@ public final class EdgeDetector {
         long count50_150 =
                 Core.countNonZero(
                         edges50_150
+                );
+
+        long countOtsu =
+                Core.countNonZero(
+                        edgesOtsu
+                );
+
+        long countMedian =
+                Core.countNonZero(
+                        edgesMedian
                 );
 
         ConsoleUtil.log(
@@ -149,19 +297,52 @@ public final class EdgeDetector {
                         + count50_150
         );
 
+        ConsoleUtil.log(
+                "Canny Otsu edge pixels="
+                        + countOtsu
+        );
+
+        ConsoleUtil.log(
+                "Canny median edge pixels="
+                        + countMedian
+        );
+
+        Path debugDir =
+                getDebugDirectory();
+
         Imgcodecs.imwrite(
-                "D:\\temp\\offset-canny-20-60.png",
+                debugDir.resolve(
+                        "offset-canny-20-60.png"
+                ).toString(),
                 edges20_60
         );
 
         Imgcodecs.imwrite(
-                "D:\\temp\\offset-canny-30-90.png",
+                debugDir.resolve(
+                        "offset-canny-30-90.png"
+                ).toString(),
                 edges30_90
         );
 
         Imgcodecs.imwrite(
-                "D:\\temp\\offset-canny-50-150.png",
+                debugDir.resolve(
+                        "offset-canny-50-150.png"
+                ).toString(),
                 edges50_150
+        );
+
+        Imgcodecs.imwrite(
+                debugDir.resolve(
+                        "offset-canny-otsu.png"
+                ).toString(),
+                edgesOtsu
+        );
+
+        Imgcodecs.imwrite(
+                debugDir.resolve(
+                        "offset-canny-median.png"
+                ).toString(),
+                edgesMedian
         );
 
         source.release();
@@ -170,9 +351,235 @@ public final class EdgeDetector {
 
         edges20_60.release();
         edges30_90.release();
-        //edges50_150.release();
+        edges50_150.release();
+        edgesMedian.release();
 
-        return edges50_150;
+        /*
+         * Otsu is returned as the single best default.
+         *
+         * If you prefer to keep the previous behaviour
+         * (50/150), replace this with `return edges50_150;`
+         * and release edgesOtsu instead.
+         */
+        return edgesOtsu;
+    }
+
+    /**
+     * Otsu threshold on the gradient magnitude of the
+     * given single-channel image.
+     *
+     * Canny computes the gradient internally but does not
+     * expose it, so we compute a Sobel magnitude here.
+     */
+    private static double computeOtsuThreshold(
+            Mat gray) {
+
+        Mat gradX =
+                new Mat();
+
+        Mat gradY =
+                new Mat();
+
+        Imgproc.Sobel(
+                gray,
+                gradX,
+                CvType.CV_16S,
+                1,
+                0,
+                3
+        );
+
+        Imgproc.Sobel(
+                gray,
+                gradY,
+                CvType.CV_16S,
+                0,
+                1,
+                3
+        );
+
+        Mat absX =
+                new Mat();
+
+        Mat absY =
+                new Mat();
+
+        Core.convertScaleAbs(
+                gradX,
+                absX
+        );
+
+        Core.convertScaleAbs(
+                gradY,
+                absY
+        );
+
+        Mat magnitude =
+                new Mat();
+
+        Core.addWeighted(
+                absX,
+                0.5,
+                absY,
+                0.5,
+                0,
+                magnitude
+        );
+
+        /*
+         * Otsu needs an 8-bit single-channel image.
+         * Normalize the magnitude to 0..255 first.
+         */
+        Mat normalized =
+                new Mat();
+
+        Core.normalize(
+                magnitude,
+                normalized,
+                0,
+                255,
+                Core.NORM_MINMAX,
+                CvType.CV_8UC1
+        );
+
+        Mat dummy =
+                new Mat();
+
+        double otsu =
+                Imgproc.threshold(
+                        normalized,
+                        dummy,
+                        0,
+                        255,
+                        Imgproc.THRESH_BINARY
+                                | Imgproc.THRESH_OTSU
+                );
+
+        gradX.release();
+        gradY.release();
+        absX.release();
+        absY.release();
+        magnitude.release();
+        normalized.release();
+        dummy.release();
+
+        return otsu;
+    }
+
+    /**
+     * Median of the gradient magnitude of the given
+     * single-channel image.
+     */
+    private static double computeMedianGradient(
+            Mat gray) {
+
+        Mat gradX =
+                new Mat();
+
+        Mat gradY =
+                new Mat();
+
+        Imgproc.Sobel(
+                gray,
+                gradX,
+                CvType.CV_16S,
+                1,
+                0,
+                3
+        );
+
+        Imgproc.Sobel(
+                gray,
+                gradY,
+                CvType.CV_16S,
+                0,
+                1,
+                3
+        );
+
+        Mat absX =
+                new Mat();
+
+        Mat absY =
+                new Mat();
+
+        Core.convertScaleAbs(
+                gradX,
+                absX
+        );
+
+        Core.convertScaleAbs(
+                gradY,
+                absY
+        );
+
+        Mat magnitude =
+                new Mat();
+
+        Core.addWeighted(
+                absX,
+                0.5,
+                absY,
+                0.5,
+                0,
+                magnitude
+        );
+
+        /*
+         * Histogram of the magnitude values.
+         */
+        java.util.List<Mat> histInput =
+                java.util.Collections.singletonList(
+                        magnitude
+                );
+
+        Mat hist =
+                new Mat();
+
+        Imgproc.calcHist(
+                histInput,
+                new org.opencv.core.MatOfInt(
+                        new int[]{0}
+                ),
+                new Mat(),
+                hist,
+                new org.opencv.core.MatOfInt(
+                        new int[]{256}
+                ),
+                new org.opencv.core.MatOfFloat(
+                        new float[]{0, 256}
+                )
+        );
+
+        double totalPixels =
+                magnitude.rows() * (double) magnitude.cols();
+
+        double half =
+                totalPixels / 2.0;
+
+        double cumulative = 0.0;
+
+        double median = 0.0;
+
+        for (int i = 0; i < 256; i++) {
+
+            cumulative +=
+                    hist.get(i, 0)[0];
+
+            if (cumulative >= half) {
+                median = i;
+                break;
+            }
+        }
+
+        gradX.release();
+        gradY.release();
+        absX.release();
+        absY.release();
+        magnitude.release();
+        hist.release();
+
+        return median;
     }
 
     private static Mat bufferedImageToMat(

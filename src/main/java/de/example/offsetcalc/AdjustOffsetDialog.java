@@ -44,13 +44,15 @@ public class AdjustOffsetDialog extends JDialog {
     private final JCheckBox selectedBuildingsOnlyCheckBox;
 
     private static String lastDebugConfigJson;
+    private static boolean lastSelectedBuildingsOnly = false;
+
     private static final String DEFAULT_DEBUG_CONFIG =
             """
             {
               "TestOffsetX": 0.0,
               "TestOffsetY": 0.0,
-              "BuildingSearchRadiusMeters": 10.0,
-              "PaddingMeters": 12.0,
+              "BuildingSearchRadiusMeters": 20.0,
+              "PaddingMeters": 40.0,
               "ApplyResult": true
             }
             """;
@@ -66,7 +68,10 @@ public class AdjustOffsetDialog extends JDialog {
         );
 
         selectedBuildingsOnlyCheckBox =
-                new JCheckBox("Selected buildings only");
+                new JCheckBox(
+                        "Selected buildings only",
+                        lastSelectedBuildingsOnly
+                );
 
         List<OsmDataLayer> dataLayers =
                 MainApplication.getLayerManager()
@@ -179,7 +184,19 @@ public class AdjustOffsetDialog extends JDialog {
         okButton.addActionListener(
                 e -> {
                     lastDebugConfigJson = debugConfigTextArea.getText();
+                    lastSelectedBuildingsOnly =
+                            selectedBuildingsOnlyCheckBox.isSelected();
                     confirmed = true;
+                    dispose();
+                }
+        );
+
+        JButton cancelButton =
+                new JButton("Cancel");
+
+        cancelButton.addActionListener(
+                e -> {
+                    confirmed = false;
                     dispose();
                 }
         );
@@ -188,6 +205,7 @@ public class AdjustOffsetDialog extends JDialog {
                 new JPanel();
 
         buttonPanel.add(okButton);
+        buttonPanel.add(cancelButton);
 
         setLayout(
                 new BorderLayout()

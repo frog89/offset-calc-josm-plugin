@@ -91,17 +91,27 @@ public final class BuildingEdgeMatcher {
         this.testOffsetX = testOffsetX;
         this.testOffsetY = testOffsetY;
 
+        int scaleCenterX =
+                mapView.getWidth() / 2;
+
+        int scaleCenterY =
+                mapView.getHeight() / 2;
+
         double eastPerPixel =
                 Math.abs(
-                        getEastPerPixel(
-                                mapView
+                        MapScaleUtil.metersPerPixelEast(
+                                mapView,
+                                scaleCenterX,
+                                scaleCenterY
                         )
                 );
 
         double northPerPixel =
                 Math.abs(
-                        getNorthPerPixel(
-                                mapView
+                        MapScaleUtil.metersPerPixelNorth(
+                                mapView,
+                                scaleCenterX,
+                                scaleCenterY
                         )
                 );
 
@@ -772,20 +782,6 @@ public final class BuildingEdgeMatcher {
             match.geometryPoints =
                     reduced;
         }
-    }
-
-    private static double getEastPerPixel(
-            MapView mapView) {
-
-        return mapView.getEastNorth(1, 0).east()
-                - mapView.getEastNorth(0, 0).east();
-    }
-
-    private static double getNorthPerPixel(
-            MapView mapView) {
-
-        return mapView.getEastNorth(0, 1).north()
-                - mapView.getEastNorth(0, 0).north();
     }
 
     private static final class BuildingMatch {

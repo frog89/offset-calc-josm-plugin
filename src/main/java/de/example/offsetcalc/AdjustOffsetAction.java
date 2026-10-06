@@ -186,17 +186,16 @@ public class AdjustOffsetAction extends AbstractAction {
             JOptionPane.showMessageDialog(
                     MainApplication.getMainFrame(),
                     String.format(
-                            "Calculated imagery offset:%n%n"
-                            + "East:  %.2f m%n"
-                            + "North: %.2f m%n%n"
-                            + "Pixel offset:%n"
-                            + "X: %.2f px%n"
-                            + "Y: %.2f px%n%n"
-                            + "Error: %.3f px",
+                            java.util.Locale.ROOT,
+                            "Calculated imagery offset for %d buildings:%n%n"
+                                    + "East:  %.2f Meter (= %.2f Pixel)%n"
+                                    + "North: %.2f Meter (= %.2f Pixel)%n%n"
+                                    + "Error: %.3f",
+                            result.getBuildingCount(),
                             result.getEastOffset(),
+                            result.getEastPixels(),
                             result.getNorthOffset(),
-                            result.getPixelX(),
-                            result.getPixelY(),
+                            result.getNorthPixels(),
                             result.getError()
                     ),
                     "Adjust Offset",

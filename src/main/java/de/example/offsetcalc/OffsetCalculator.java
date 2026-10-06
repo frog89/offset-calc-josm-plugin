@@ -39,6 +39,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.nio.file.Path;
 
 public class OffsetCalculator {
     private final OsmDataLayer dataLayer;
@@ -122,14 +123,6 @@ public class OffsetCalculator {
             );
 
             /*
-             * The analysis viewport is now based on
-             * the actual MapView state after JOSM
-             * has performed the zoom.
-             */
-            AnalysisViewport analysisViewport =
-                    createAnalysisViewport();
-
-            /*
              * Recalculate the building bounds after
              * the zoom because the screen coordinates
              * have changed.
@@ -151,10 +144,7 @@ public class OffsetCalculator {
              * Render the complete current JOSM viewport
              * in its native MapView coordinate system.
              */
-            BufferedImage fullImagery =
-                    renderImagery(
-                            analysisViewport
-                    );
+            BufferedImage fullImagery = renderImagery();
 
             /*
              * Crop the imagery around the building bounds.
@@ -178,7 +168,6 @@ public class OffsetCalculator {
              */
             BufferedImage fullGeometry =
                     renderGeometry(
-                            analysisViewport,
                             config.isSelectedBuildingsOnly()
                     );
 
@@ -284,14 +273,33 @@ public class OffsetCalculator {
                             + matcher.getBuildingWithEdgesCount()
             );
 
+            /*
+             * Use real-world meters per pixel, evaluated at the
+             * center of the MapView. This is projection-independent
+             * (works for UTM as well as for Mercator).
+             */
+            int scaleCenterX =
+                    mapView.getWidth() / 2;
+
+            int scaleCenterY =
+                    mapView.getHeight() / 2;
+
             double eastPerPixel =
                     Math.abs(
-                            getEastPerPixel()
+                            MapScaleUtil.metersPerPixelEast(
+                                    mapView,
+                                    scaleCenterX,
+                                    scaleCenterY
+                            )
                     );
 
             double northPerPixel =
                     Math.abs(
-                            getNorthPerPixel()
+                            MapScaleUtil.metersPerPixelNorth(
+                                    mapView,
+                                    scaleCenterX,
+                                    scaleCenterY
+                            )
                     );
 
             double eastOffset =
@@ -312,7 +320,10 @@ public class OffsetCalculator {
                     best.y,
                     eastOffset,
                     northOffset,
-                    best.error
+                    best.error,
+                    matcher.getBuildingWithEdgesCount(),
+                    -best.x,     // East-Pixel (Vorzeichen wie eastOffset)
+                    best.y       // North-Pixel (Vorzeichen wie northOffset)
             );
 
         } finally {
@@ -324,7 +335,6 @@ public class OffsetCalculator {
     }
 
     private BufferedImage renderGeometry(
-            AnalysisViewport analysisViewport,
             boolean selectedBuildingsOnly) {
 
         int mapViewWidth =
@@ -359,8 +369,7 @@ public class OffsetCalculator {
     /**
      * Render ONLY the selected imagery layer.
      */
-    private BufferedImage renderImagery(
-            AnalysisViewport analysisViewport) {
+    private BufferedImage renderImagery() {
 
         int mapViewWidth =
                 mapView.getWidth();
@@ -448,20 +457,23 @@ public class OffsetCalculator {
 
         try {
 
+            Path debugDir =
+                    EdgeDetector.getDebugDirectory();
+
             ImageIO.write(
                     imagery,
                     "png",
-                    new File(
-                            "D:\\temp\\offset-imagery.png"
-                    )
+                    debugDir.resolve(
+                            "offset-imagery.png"
+                    ).toFile()
             );
 
             ImageIO.write(
                     geometryImage,
                     "png",
-                    new File(
-                            "D:\\temp\\offset-geometry.png"
-                    )
+                    debugDir.resolve(
+                            "offset-geometry.png"
+                    ).toFile()
             );
 
         } catch (IOException e) {
@@ -523,12 +535,15 @@ public class OffsetCalculator {
                     pixels.length
             );
 
+            Path debugDir =
+                    EdgeDetector.getDebugDirectory();
+
             ImageIO.write(
                     cannyImage,
                     "png",
-                    new File(
-                            "D:\\temp\\offset-canny.png"
-                    )
+                    debugDir.resolve(
+                            "offset-canny.png"
+                    ).toFile()
             );
 
             ConsoleUtil.log(
@@ -707,18 +722,6 @@ public class OffsetCalculator {
         return points;
     }
 
-    private double getEastPerPixel() {
-        EastNorth a = mapView.getEastNorth(0, 0);
-        EastNorth b = mapView.getEastNorth(1, 0);
-        return b.east() - a.east();
-    }
-
-    private double getNorthPerPixel() {
-        EastNorth a = mapView.getEastNorth(0, 0);
-        EastNorth b = mapView.getEastNorth(0, 1);
-        return b.north() - a.north();
-    }
-
     private org.openstreetmap.josm.data.ProjectionBounds getProjectionBounds(
             java.awt.Rectangle screenBounds) {
 
@@ -763,85 +766,6 @@ public class OffsetCalculator {
                 minNorth,
                 maxEast,
                 maxNorth
-        );
-    }
-
-    private AnalysisViewport createAnalysisViewport() {
-
-        final int maxRasterSize = 2000;
-
-        int mapViewWidth =
-                mapView.getWidth();
-
-        int mapViewHeight =
-                mapView.getHeight();
-
-        if (mapViewWidth <= 0
-                || mapViewHeight <= 0) {
-
-            throw new IllegalStateException(
-                    "MapView has no usable size."
-            );
-        }
-
-        double rasterScale;
-
-        if (mapViewWidth >= mapViewHeight) {
-
-            rasterScale =
-                    (double) maxRasterSize
-                            / mapViewWidth;
-
-        } else {
-
-            rasterScale =
-                    (double) maxRasterSize
-                            / mapViewHeight;
-        }
-
-        int width =
-                Math.max(
-                        1,
-                        (int) Math.round(
-                                mapViewWidth
-                                        * rasterScale
-                        )
-                );
-
-        int height =
-                Math.max(
-                        1,
-                        (int) Math.round(
-                                mapViewHeight
-                                        * rasterScale
-                        )
-                );
-
-        double mapViewScale =
-                mapView.getScale();
-
-        ConsoleUtil.log(
-                "analysis viewport: mapView="
-                        + mapViewWidth
-                        + "x"
-                        + mapViewHeight
-                        + ", raster="
-                        + width
-                        + "x"
-                        + height
-                        + ", rasterScale="
-                        + rasterScale
-                        + ", mapViewScale="
-                        + mapViewScale
-                        + ", center="
-                        + mapView.getCenter()
-        );
-
-        return new AnalysisViewport(
-                mapView.getCenter(),
-                mapViewScale,
-                width,
-                height
         );
     }
 
@@ -1162,25 +1086,5 @@ public class OffsetCalculator {
                 originX,
                 originY
         );
-    }
-
-    private static final class AnalysisViewport {
-
-        private final org.openstreetmap.josm.data.coor.EastNorth center;
-        private final double scale;
-        private final int width;
-        private final int height;
-
-        private AnalysisViewport(
-                org.openstreetmap.josm.data.coor.EastNorth center,
-                double scale,
-                int width,
-                int height) {
-
-            this.center = center;
-            this.scale = scale;
-            this.width = width;
-            this.height = height;
-        }
     }
 }
