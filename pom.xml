@@ -9,7 +9,7 @@
 
     <groupId>de.example</groupId>
     <artifactId>offset-calc-josm-plugin</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <name>offset-calc-josm-plugin</name>
