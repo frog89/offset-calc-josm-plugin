@@ -15,7 +15,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.example.offsetcalc;
+package de.franka.offsetcalc;
 
 import nu.pattern.OpenCV;
 
@@ -367,7 +367,7 @@ public final class EdgeDetector {
     /**
      * Otsu threshold on the gradient magnitude of the
      * given single-channel image.
-     *
+     * <p>
      * Canny computes the gradient internally but does not
      * expose it, so we compute a Sobel magnitude here.
      */
@@ -539,16 +539,13 @@ public final class EdgeDetector {
         Imgproc.calcHist(
                 histInput,
                 new org.opencv.core.MatOfInt(
-                        new int[]{0}
-                ),
+                        0),
                 new Mat(),
                 hist,
                 new org.opencv.core.MatOfInt(
-                        new int[]{256}
-                ),
+                        256),
                 new org.opencv.core.MatOfFloat(
-                        new float[]{0, 256}
-                )
+                        0, 256)
         );
 
         double totalPixels =

@@ -15,7 +15,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.example.offsetcalc;
+package de.franka.offsetcalc;
 
 public class OffsetCalculationConfig {
 

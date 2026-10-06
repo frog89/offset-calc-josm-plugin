@@ -15,14 +15,14 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.example.offsetcalc;
+package de.franka.offsetcalc;
 
 import java.util.function.DoubleBinaryOperator;
 
 /**
  * Coarse-to-fine grid search for the (x, y) pixel shift that
  * minimizes an error function.
- *
+ * <p>
  * Pass 1: +/- 100 px in steps of 4 px
  * Pass 2: +/-   4 px in steps of 0.5 px (covers the half step of pass 1)
  * Pass 3: +/- 0.5 px in steps of 0.1 px

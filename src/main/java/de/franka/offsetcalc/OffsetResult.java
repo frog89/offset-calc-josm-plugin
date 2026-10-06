@@ -15,15 +15,12 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.example.offsetcalc;
+package de.franka.offsetcalc;
 
 public final class OffsetResult {
 
     private final boolean valid;
     private final String message;
-
-    private final double pixelX;
-    private final double pixelY;
 
     private final double eastOffset;
     private final double northOffset;
@@ -43,8 +40,6 @@ public final class OffsetResult {
     private OffsetResult(
             boolean valid,
             String message,
-            double pixelX,
-            double pixelY,
             double eastOffset,
             double northOffset,
             double error,
@@ -54,9 +49,6 @@ public final class OffsetResult {
 
         this.valid = valid;
         this.message = message;
-
-        this.pixelX = pixelX;
-        this.pixelY = pixelY;
 
         this.eastOffset = eastOffset;
         this.northOffset = northOffset;
@@ -77,8 +69,6 @@ public final class OffsetResult {
                 message,
                 0,
                 0,
-                0,
-                0,
                 Double.NaN,
                 0,
                 0,
@@ -87,8 +77,6 @@ public final class OffsetResult {
     }
 
     public static OffsetResult valid(
-            double pixelX,
-            double pixelY,
             double eastOffset,
             double northOffset,
             double error,
@@ -99,8 +87,6 @@ public final class OffsetResult {
         return new OffsetResult(
                 true,
                 null,
-                pixelX,
-                pixelY,
                 eastOffset,
                 northOffset,
                 error,

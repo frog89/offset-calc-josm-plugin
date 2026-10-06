@@ -15,7 +15,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.example.offsetcalc;
+package de.franka.offsetcalc;
 
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
@@ -256,15 +256,6 @@ public final class BuildingEdgeMatcher {
 
     public double getRadiusMeters() {
         return radiusMeters;
-    }
-
-    public void release() {
-
-        for (BuildingMatch match : matches) {
-            match.release();
-        }
-
-        matches.clear();
     }
 
     private BuildingMatch createBuildingMatch(
@@ -1007,12 +998,12 @@ public final class BuildingEdgeMatcher {
     /**
      * Diagnostic: finds the best shift for every building on its own
      * and compares it with the global shift.
-     *
+     * <p>
      * Small spread  -> a global offset is a good model, remaining
      *                  error comes from a few outlier buildings.
      * Large spread  -> imagery distortion / roof lean / inaccurate
      *                  geometry; a single offset cannot do better.
-     *
+     * <p>
      * East/North are given with the same sign convention as the
      * final result (shift to apply to the imagery).
      */

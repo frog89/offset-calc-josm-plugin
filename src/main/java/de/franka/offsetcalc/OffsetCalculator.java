@@ -15,7 +15,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.example.offsetcalc;
+package de.franka.offsetcalc;
 
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
@@ -329,8 +329,6 @@ public class OffsetCalculator {
                     best.y * northPerPixel;
 
             return OffsetResult.valid(
-                    best.x,
-                    best.y,
                     eastOffset,
                     northOffset,
                     best.error,

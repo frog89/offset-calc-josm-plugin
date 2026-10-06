@@ -15,21 +15,33 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.example.offsetcalc;
+package de.franka.offsetcalc;
 
-public class SearchResult {
+public final class ConsoleUtil {
 
-    final double x;
-    final double y;
-    final double error;
+    private ConsoleUtil() {
+    }
 
-    SearchResult(
-            double x,
-            double y,
-            double error) {
+    public static void log(
+            String message) {
 
-        this.x = x;
-        this.y = y;
-        this.error = error;
+        System.out.println(
+                "OffsetCalc: "
+                        + message
+        );
+    }
+
+    public static void error(
+            String message,
+            Throwable throwable) {
+
+        System.err.println(
+                "OffsetCalc: "
+                        + message
+        );
+
+        if (throwable != null) {
+            throwable.printStackTrace();
+        }
     }
 }

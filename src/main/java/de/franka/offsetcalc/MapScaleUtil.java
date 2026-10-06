@@ -15,7 +15,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.example.offsetcalc;
+package de.franka.offsetcalc;
 
 import org.openstreetmap.josm.data.coor.EastNorth;
 import org.openstreetmap.josm.data.coor.LatLon;
@@ -25,12 +25,12 @@ import org.openstreetmap.josm.gui.MapView;
 /**
  * Projection-independent conversion of screen pixels
  * into real-world ground distance in meters.
- *
+ * <p>
  * The previous approach used the raw East/North difference
  * from MapView.getEastNorth(...). That is only correct for
  * metric projections (e.g. UTM). For Mercator (EPSG:3857),
  * the values are Mercator units, not meters.
- *
+ * <p>
  * This helper converts through LatLon and uses the
  * great-circle distance, which is always in meters.
  */

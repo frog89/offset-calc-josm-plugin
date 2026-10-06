@@ -74,22 +74,6 @@
                 <version>3.4.2</version>
 
                 <configuration>
-                    <archive>
-                        <manifestEntries>
-
-                            <Plugin-Mainversion>${josm.revision}</Plugin-Mainversion>
-                            <Plugin-Version>${project.version}</Plugin-Version>
-                            <Plugin-Class>
-                                de.example.offsetcalc.OffsetCalcPlugin
-                            </Plugin-Class>
-                            <Plugin-Description>
-                                Automatically calculates imagery offsets
-                                from OSM geometries using OpenCV.
-                            </Plugin-Description>
-                            <Author>Frank</Author>
-
-                        </manifestEntries>
-                    </archive>
                 </configuration>
             </plugin>
 
@@ -131,16 +115,16 @@
                                 <transformer implementation=
                                                      "org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
+
                                         <Plugin-Mainversion>${josm.revision}</Plugin-Mainversion>
                                         <Plugin-Version>${project.version}</Plugin-Version>
-                                        <Plugin-Class>
-                                            de.example.offsetcalc.OffsetCalcPlugin
-                                        </Plugin-Class>
-                                        <Plugin-Description>
-                                            Automatically calculates imagery offsets
-                                            from OSM geometries using OpenCV.
-                                        </Plugin-Description>
-                                        <Author>Frank</Author>
+                                        <Plugin-Class>de.franka.offsetcalc.OffsetCalcPlugin</Plugin-Class>
+                                        <Plugin-Description>Automatically calculates imagery offsets from OSM geometries using OpenCV.</Plugin-Description>
+                                        <Author>Frank Augustin</Author>
+                                        <Plugin-Icon>images/adjust_offset.svg</Plugin-Icon>
+                                        <Plugin-Link>https://github.com/frog89/offset-calc-josm-plugin</Plugin-Link>
+                                        <Plugin-Canloadatruntime>true</Plugin-Canloadatruntime>
+
                                     </manifestEntries>
                                 </transformer>
                             </transformers>

@@ -15,25 +15,21 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.example.offsetcalc;
+package de.franka.offsetcalc;
 
-public class FilterUtil {
-    public static  boolean filterOutWay(org.openstreetmap.josm.data.osm.Way way) {
-        if (way.isDeleted() || way.isIncomplete()) {
-            return true;
-        }
+public class SearchResult {
 
-        if (!way.isClosed()) {
-            return true;
-        }
+    final double x;
+    final double y;
+    final double error;
 
-        if (!way.hasTag("building")) {
-            return true;
-        }
+    SearchResult(
+            double x,
+            double y,
+            double error) {
 
-        if (way.getNodesCount() < 2) {
-            return true;
-        }
-        return false;
+        this.x = x;
+        this.y = y;
+        this.error = error;
     }
 }
