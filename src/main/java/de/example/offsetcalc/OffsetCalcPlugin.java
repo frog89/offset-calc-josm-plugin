@@ -20,17 +20,29 @@ package de.example.offsetcalc;
 import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.plugins.Plugin;
 import org.openstreetmap.josm.plugins.PluginInformation;
+import org.openstreetmap.josm.tools.ImageProvider;
 
-import javax.swing.JMenuItem;
+import javax.swing.*;
 
 public class OffsetCalcPlugin extends Plugin {
 
     public OffsetCalcPlugin(PluginInformation info) {
         super(info);
 
-        JMenuItem item = new JMenuItem(
-                new AdjustOffsetAction()
-        );
+        JMenuItem item = new JMenuItem(new AdjustOffsetAction());
+
+        try {
+            item.setIcon(
+                    ImageProvider.get(
+                            "adjust_offset.svg"
+                    )
+            );
+        } catch (Exception ex) {
+            ConsoleUtil.error(
+                    "Could not load menu icon: images/adjust_offset.svg",
+                    ex
+            );
+        }
 
         MainApplication.getMenu()
                 .imageryMenu
