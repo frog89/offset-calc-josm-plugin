@@ -1,25 +1,9 @@
-Ich habe ein Josm Open Source Plugin in Java (Maven-Projekt in IntelliJ) geschrieben. Das Repository ist public und die Dateien sind hier: https://github.com/frog89/offset-calc-josm-plugin/blob/pom.xml
-https://github.com/frog89/offset-calc-josm-plugin/blob/main/src/main/java/de/example/offsetcalc/AdjustOffsetAction
-https://github.com/frog89/offset-calc-josm-plugin/blob/main/src/main/java/de/example/offsetcalc/AdjustOffsetDialog
-https://github.com/frog89/offset-calc-josm-plugin/blob/main/src/main/java/de/example/offsetcalc/BuildingEdgeMatcher
-https://github.com/frog89/offset-calc-josm-plugin/blob/main/src/main/java/de/example/offsetcalc/ConsoleUtil
-https://github.com/frog89/offset-calc-josm-plugin/blob/main/src/main/java/de/example/offsetcalc/EdgeDetector
-https://github.com/frog89/offset-calc-josm-plugin/blob/main/src/main/java/de/example/offsetcalc/FilterUtil
-https://github.com/frog89/offset-calc-josm-plugin/blob/main/src/main/java/de/example/offsetcalc/GeometryRasterizer
-https://github.com/frog89/offset-calc-josm-plugin/blob/main/src/main/java/de/example/offsetcalc/OffsetCalcPlugin
-https://github.com/frog89/offset-calc-josm-plugin/blob/main/src/main/java/de/example/offsetcalc/OffsetCalculationConfig
-https://github.com/frog89/offset-calc-josm-plugin/blob/main/src/main/java/de/example/offsetcalc/OffsetCalculator
-https://github.com/frog89/offset-calc-josm-plugin/blob/main/src/main/java/de/example/offsetcalc/OffsetResult
-https://github.com/frog89/offset-calc-josm-plugin/blob/main/src/main/java/de/example/offsetcalc/OffsetSearch
-https://github.com/frog89/offset-calc-josm-plugin/blob/main/src/main/java/de/example/offsetcalc/SearchResult
-
-Das Plugin soll einen sinnvollen Offset eines auszuwählenden Imagery-Layers automatisch einstellen.
+Ich habe ein Josm Open Source Plugin in Java (Maven-Projekt in IntelliJ) geschrieben. Das Plugin soll einen sinnvollen Offset eines auszuwählenden Imagery-Layers automatisch einstellen.
 
 Das Plugin öffnet einen Dialog (AdjustOffsetDialog.java). Darin kann man in einer ComboBox einen Data Layer und über eine andere Combobox einen Imagery-Layer auswählen. Außerdem ist ein JSON-Schnipsel mit Konfigurationsparametern enthalten.
 
 Nach dem Starten der Offset-Berechnung per "OK" Knopf wird aus einem Ausschnitt des Imagery Bildes per Canny Funktion eine Kanten-Extraktion durchgeführt. Die Kanten werden dann gegen die Gebäude-Objekte im Data Layer verglichen und daraus wird ein Minimum der Kantendifferenzen ermittelt.
 
-In einem temporären Folder d:\temp werden zur Analsysezwecken das Imagery-Bild (offset-imagery.png), das aus dem Data Layer ermittelte Biold (offset-geometry.png) und das Canny-Bild (offset-canny.png) ermittelt. Alle Bilder haben die gleiche Auflösung. Einige Statistik-Infos werden auf die Console geschrieben.
+In einem temporären Folder werden zur Analsysezwecken das Imagery-Bild (offset-imagery.png), das aus dem Data Layer ermittelte Biold (offset-geometry.png) und das Canny-Bild (offset-canny.png) ermittelt. Alle Bilder haben die gleiche Auflösung. Einige Statistik-Infos werden auf die Console geschrieben.
 
-Aktuell funktioniert das Plugin und die Generierung der Bilder nach d:\temp bereits. 
-Im Dialog (AdjustOffsetDialog.java) befindet sich ein Textfeld "Debug Configuration",  das einen JSON-Schnipsel mit Eigenschaften anzeigt. Eine dieser Eigenschaften ist boolean und heißt "SelectedBuildingsOnly". Ich möchte diese Eigenschaft aus dem JSON entfernen und stattdessen im Dialog eine Checkbox anzeigen.
+Im Dialog (AdjustOffsetDialog.java) befindet sich ein Textfeld "Debug Configuration", welches weitere Parameter enthält und per VM option -Doffsetcalc.debug=true angezeigt werden kann.

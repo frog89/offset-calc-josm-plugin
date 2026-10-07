@@ -1,7 +1,0 @@
-Ich möchte ein Plugin namens "offset-calc-josm-plugin" für JOSM schreiben, das maven benutzt und in Github gehostet wird.
-
-Das Plugin soll in JOSM einen Menüeintrag "Imagery" -> "Adjust Offset" zufügen. Wenn man diesen Menüeintrag benutzt, öffnet sich ein Dialog. Im Dialog befinden sich oben 2 Comboboxen und unten ein Button "OK". Die eine Combobox soll erlauben, einen Data Layer auszuwählen und die andere, einen Imagery-Layer auszuwählen. 
-
-Beim Klicken auf den Button "OK" sollen zunächst Kanten aus dem Imagery-Layer extrahiert werden. Dann soll das Programm diese Kanten mit den geometrischen Strukturen (Rechtecke, Kreise, Polygone...) vergleichen, die bereits auf dem Data-Layer eingezeichnet sind. Der Imagery-Layer soll dann per Osset-Einstellung so verschoben werden, dass die Unterschiede zwischen den Strukturen minimal werden.
-
-Gib mir den Java Code für diese Aufgabe.

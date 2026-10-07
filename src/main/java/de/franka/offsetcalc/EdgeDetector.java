@@ -133,39 +133,6 @@ public final class EdgeDetector {
         );
 
         /*
-         * Fixed reference thresholds, kept for comparison.
-         */
-        Mat edges20_60 =
-                new Mat();
-
-        Mat edges30_90 =
-                new Mat();
-
-        Mat edges50_150 =
-                new Mat();
-
-        Imgproc.Canny(
-                blurred,
-                edges20_60,
-                20,
-                60
-        );
-
-        Imgproc.Canny(
-                blurred,
-                edges30_90,
-                30,
-                90
-        );
-
-        Imgproc.Canny(
-                blurred,
-                edges50_150,
-                50,
-                150
-        );
-
-        /*
          * Otsu-based threshold pair.
          *
          * Otsu is computed on the gradient magnitude of the
@@ -202,165 +169,27 @@ public final class EdgeDetector {
         ConsoleUtil.log(
                 String.format(
                         java.util.Locale.ROOT,
-                        "Canny Otsu: low=%.2f, high=%.2f",
+                        "Canny Otsu: low=%.2f, high=%.2f, edge pixels=%d",
                         otsuLow,
-                        otsuHigh
+                        otsuHigh,
+                        Core.countNonZero(edgesOtsu)
                 )
-        );
-
-        /*
-         * Median-based threshold pair.
-         *
-         * Uses the median of the gradient magnitude and a
-         * sigma factor. Robust against varying brightness
-         * and contrast between different imagery sources.
-         */
-        double medianGradient =
-                computeMedianGradient(
-                        blurred
-                );
-
-        double sigma = 0.33;
-
-        double medianLow =
-                Math.max(
-                        1.0,
-                        medianGradient * (1.0 - sigma)
-                );
-
-        double medianHigh =
-                Math.max(
-                        medianLow + 1.0,
-                        medianGradient * (1.0 + sigma)
-                );
-
-        Mat edgesMedian =
-                new Mat();
-
-        Imgproc.Canny(
-                blurred,
-                edgesMedian,
-                medianLow,
-                medianHigh
-        );
-
-        ConsoleUtil.log(
-                String.format(
-                        java.util.Locale.ROOT,
-                        "Canny median: low=%.2f, high=%.2f (median gradient=%.2f)",
-                        medianLow,
-                        medianHigh,
-                        medianGradient
-                )
-        );
-
-        /*
-         * Statistics + debug output.
-         */
-        long count20_60 =
-                Core.countNonZero(
-                        edges20_60
-                );
-
-        long count30_90 =
-                Core.countNonZero(
-                        edges30_90
-                );
-
-        long count50_150 =
-                Core.countNonZero(
-                        edges50_150
-                );
-
-        long countOtsu =
-                Core.countNonZero(
-                        edgesOtsu
-                );
-
-        long countMedian =
-                Core.countNonZero(
-                        edgesMedian
-                );
-
-        ConsoleUtil.log(
-                "Canny 20/60 edge pixels="
-                        + count20_60
-        );
-
-        ConsoleUtil.log(
-                "Canny 30/90 edge pixels="
-                        + count30_90
-        );
-
-        ConsoleUtil.log(
-                "Canny 50/150 edge pixels="
-                        + count50_150
-        );
-
-        ConsoleUtil.log(
-                "Canny Otsu edge pixels="
-                        + countOtsu
-        );
-
-        ConsoleUtil.log(
-                "Canny median edge pixels="
-                        + countMedian
         );
 
         Path debugDir =
-                getDebugDirectory();
+                EdgeDetector.getDebugDirectory();
 
         Imgcodecs.imwrite(
                 debugDir.resolve(
-                        "offset-canny-20-60.png"
-                ).toString(),
-                edges20_60
-        );
-
-        Imgcodecs.imwrite(
-                debugDir.resolve(
-                        "offset-canny-30-90.png"
-                ).toString(),
-                edges30_90
-        );
-
-        Imgcodecs.imwrite(
-                debugDir.resolve(
-                        "offset-canny-50-150.png"
-                ).toString(),
-                edges50_150
-        );
-
-        Imgcodecs.imwrite(
-                debugDir.resolve(
-                        "offset-canny-otsu.png"
+                        "offset-canny.png"
                 ).toString(),
                 edgesOtsu
-        );
-
-        Imgcodecs.imwrite(
-                debugDir.resolve(
-                        "offset-canny-median.png"
-                ).toString(),
-                edgesMedian
         );
 
         source.release();
         gray.release();
         blurred.release();
 
-        edges20_60.release();
-        edges30_90.release();
-        edges50_150.release();
-        edgesMedian.release();
-
-        /*
-         * Otsu is returned as the single best default.
-         *
-         * If you prefer to keep the previous behaviour
-         * (50/150), replace this with `return edges50_150;`
-         * and release edgesOtsu instead.
-         */
         return edgesOtsu;
     }
 
