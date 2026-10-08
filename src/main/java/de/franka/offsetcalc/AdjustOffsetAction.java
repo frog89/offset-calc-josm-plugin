@@ -213,7 +213,6 @@ public class AdjustOffsetAction extends AbstractAction {
                             }
 
                             if (config.isApplyResult()) {
-
                                 OffsetCalculator calculator =
                                         new OffsetCalculator(
                                                 dataLayer,
@@ -221,14 +220,20 @@ public class AdjustOffsetAction extends AbstractAction {
                                                 config,
                                                 this::publish
                                         );
-
                                 calculator.applyResult(result);
-
                             } else {
+                                ConsoleUtil.log("Apply Result is disabled !!!");
+                            }
 
-                                ConsoleUtil.log(
-                                        "Apply Result is disabled !!!"
-                                );
+                            String quality;
+                            if (result.getError() <= 1.0) {
+                                quality = "very good";
+                            } else if (result.getError() <= 2.0) {
+                                quality = "good";
+                            } else if (result.getError() <= 4.0) {
+                                quality = "acceptable";
+                            } else {
+                                quality = "poor – result may be unreliable";
                             }
 
                             JOptionPane.showMessageDialog(
@@ -238,13 +243,14 @@ public class AdjustOffsetAction extends AbstractAction {
                                             "Calculated imagery offset for %d buildings:%n%n"
                                                     + "East:  %.2f Meter (= %.2f Pixel)%n"
                                                     + "North: %.2f Meter (= %.2f Pixel)%n%n"
-                                                    + "Error: %.3f",
+                                                    + "Error: %.3f (%s)",
                                             result.getBuildingCount(),
                                             result.getEastOffset(),
                                             result.getEastPixels(),
                                             result.getNorthOffset(),
                                             result.getNorthPixels(),
-                                            result.getError()
+                                            result.getError(),
+                                            quality
                                     ),
                                     "Adjust Offset",
                                     JOptionPane.INFORMATION_MESSAGE

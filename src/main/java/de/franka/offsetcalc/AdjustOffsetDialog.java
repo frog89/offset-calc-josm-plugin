@@ -33,35 +33,29 @@ public class AdjustOffsetDialog extends JDialog {
             """
             Adjust Offset - How it works
     
-            This plugin automatically calculates an offset between
-            an OSM data layer and an imagery layer.
+            This plugin automatically calculates an offset between an OSM data layer and an imagery layer.
     
             Prerequisites:
-            - A data layer with building outlines (tag "building",
-              closed ways) must be loaded.
-            - An imagery layer (e.g. DOP or satellite imagery) must
-              be loaded.
+            - A data layer with building outlines (tag "building", closed ways) must be loaded.
+            - An imagery layer (e.g. DOP or satellite imagery) must be loaded.
     
             Steps:
             1. Select a data layer and an imagery layer.
-            2. Optionally enable "Selected buildings only" to use
-               only the currently selected buildings.
+            2. Optionally enable "Selected buildings only" to use only the currently selected buildings.
             3. Press "OK" to start the calculation.
     
             The calculation:
-            - Edges are extracted from the imagery crop
-              (Canny edge detection).
+            - Edges are extracted from the imagery crop (Canny edge detection).
             - Building outlines from the data layer are rasterized.
-            - The plugin searches for the X/Y shift at which the
-              imagery edges and the building edges match best.
-            - The resulting shift is converted into the current
-              JOSM projection and applied as an imagery offset.
-    
+            - The plugin searches for the X/Y shift at which the imagery edges and the building edges match best.
+            - The resulting shift is converted into the current JOSM projection and applied as an imagery offset.
+            
+            Error number:
+            - Detailed infos are provided in Github -> see README.md
+            
             Notes:
-            - The calculation requires a visible map view with
-              loaded buildings.
-            - A very small area or missing building edges can
-              degrade the result.
+            - The calculation requires a visible map view with loaded buildings.
+            - A very small area or missing building edges can degrade the result.
             """;
 
     private final JComboBox<OsmDataLayer> dataLayerCombo;
@@ -299,6 +293,15 @@ public class AdjustOffsetDialog extends JDialog {
                 new JPanel(
                         new BorderLayout()
                 );
+
+        buttonPanel.setBorder(
+                BorderFactory.createEmptyBorder(
+                        0, // oben
+                        0,   // links
+                        8,   // unten
+                        8    // rechts
+                )
+        );
 
         buttonPanel.add(
                 actionButtonPanel,
